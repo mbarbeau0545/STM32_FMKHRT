@@ -16,10 +16,12 @@
 // ********************************************************************
 // *                      Includes
 // ********************************************************************
-#include "FMK_HAL/FMK_CPU/Src/FMK_CPU.h"
-#include "APP_CTRL/APP_SYS/Src/APP_SYS.h"
 #include "./FMK_HRT.h"
 #include "FMK_CFG/FMKCFG_ConfigFiles/FMKHRT_ConfigPrivate.h"
+
+#include "FMK_HAL/FMK_CPU/Src/FMK_CPU.h"
+#include "APP_CTRL/APP_SYS/Src/APP_SYS.h"
+#include "3_APP/APP_CTRL/APP_SDM/Src/APP_SDM.h"
 // ********************************************************************
 // *                      Defines
 // ********************************************************************
@@ -147,6 +149,8 @@ typedef struct
     t_sFMKHRT_TimSlaveInfo  slvInfo_as[FMKHRT_HRTIM_SLAVE_NB];         /**< storage for slaves timer inforation */
     t_bool isConfigured_b;                                             /*< Flag to know if the instance is configred */
     t_bool isCalibrate_b;                                              /*< Flag to know if the instance is configred */
+    t_bool errDetected_b;                                              /**< Flag to know there is an error active */
+    t_uint32 lastCbError_u32                                           /**< Last time an error occured */
 } t_sFMKHRT_HrTimInfo;
 /* CAUTION : Automatic generated code section : Start */
 
@@ -279,6 +283,19 @@ static void s_FMKHRT_BspCallbackMngmnt( HRTIM_HandleTypeDef * f_bspItsc_ps,
                                         t_eFMKHRT_BspCallbackId f_bspCbId_e);
 /**
 *
+*	@brief     Perform diagnostic when an error is detected.\n
+*
+*	@param[in]  f_InterruptLine_e      : enum value for timer, value from @ref t_eFMKTIM_Timer
+*	@param[in]  f_EcdrCdg_ps           : Pointor to Encoder Configuration
+*
+*  @retval RC_OK                             @ref RC_OK
+*  @retval RC_ERROR_PARAM_INVALID            @ref RC_ERROR_PARAM_INVALID
+*  @retval RC_ERROR_WRONG_STATE              @ref RC_ERROR_WRONG_STATE
+*  @retval RC_ERROR_WRONG_RESULT             @ref RC_ERROR_WRONG_RESULT
+*/
+static t_eReturnCode s_FMKHRT_PerformDiagnostic(t_eFMKHRT_HighResIstc f_highResTimer_e);
+/**
+*
 *	@brief     Get the HRTIM & Slave Timer & Chhannel from a High Resolution Line.\n
 *
 *	@param[in]  f_InterruptLine_e      : enum value for timer, value from @ref t_eFMKTIM_Timer
@@ -400,8 +417,8 @@ t_eReturnCode FMKHRT_Init(void)
         (HRTIM_TypeDef *)c_FmkHrt_HrTimCfg_as[idxHighResTim_u8].bspItsc_ps;
         g_HrTimInfo_as[idxHighResTim_u8].mstInfo_s.c_IRQNType_e = 
             c_FmkHrt_HrTimCfg_as[idxHighResTim_u8].c_MasterIRQNType_e;
-
-
+         g_HrTimInfo_as[idxHighResTim_u8].errDetected_b = (t_bool)FALSE;
+         g_HrTimInfo_as[idxHighResTim_u8].lastCbError_u32 = (t_uint32)0;
         for(idxHighSlvTim_u8 = (t_uint8)0; idxHighSlvTim_u8 < FMKHRT_HRTIM_SLAVE_NB ; idxHighSlvTim_u8++)
         {
             slvInfo_ps = (t_sFMKHRT_TimSlaveInfo *)(&g_HrTimInfo_as[idxHighResTim_u8].slvInfo_as[idxHighSlvTim_u8]);
@@ -654,10 +671,12 @@ t_eReturnCode FMKHRT_SetPwmLineWaveform(t_eFMKHRT_HighResLine f_HRLine_e,
         {
             if(f_PwmOpe_s.frequency_u32 > slvTimInfo_ps->maxFreqAccept_u32)
             {
+                ASSERT((t_uint16)f_PwmOpe_s.frequency_u32);
                 f_PwmOpe_s.frequency_u32 = slvTimInfo_ps->maxFreqAccept_u32;
             }
             else if(f_PwmOpe_s.frequency_u32 < slvTimInfo_ps->minFreqAccept_u32)
             {
+                ASSERT((t_uint16)f_PwmOpe_s.frequency_u32);
                 f_PwmOpe_s.frequency_u32 = slvTimInfo_ps->minFreqAccept_u32;
             }
 
@@ -885,7 +904,29 @@ HRTIM_HandleTypeDef * FMKHRT_PRIVATE_GetHandleTypeDef(t_eFMKHRT_HighResLine f_HR
  *********************************/
 static t_eReturnCode  s_FMKHRT_Operational(void)
 {
-    return RC_OK;
+    t_eReturnCode Ret_e;
+    t_uint8 idxHrtim_u8;
+    t_sFMKHRT_HrTimInfo * hrtimInfo_ps;
+
+    Ret_e = RC_OK;
+    for(idxHrtim_u8 = (t_uint8)0 ; idxHrtim_u8 < FMKHRT_HIGH_RES_TIMER_NB ; idxHrtim_u8++)
+    {
+        hrtimInfo_ps = (t_sFMKHRT_HrTimInfo *)(&g_HrTimInfo_as[idxHrtim_u8]);
+
+        if(hrtimInfo_ps->isConfigured_b == (t_bool)TRUE)
+        {
+            if(hrtimInfo_ps->errDetected_b == (t_bool)TRUE)
+            {
+                Ret_e = s_FMKHRT_PerformDiagnostic(idxHrtim_u8);
+            }
+            if(hrtimInfo_ps->isCalibrate_b == (t_bool)FALSE)
+            {
+                (void)HAL_HRTIM_DLLCalibrationStart(&hrtimInfo_ps->bspItsc_s, FMKHRT_BASIC_CALIBRATION);
+                (void)HAL_HRTIM_PollForDLLCalibration(&hrtimInfo_ps->bspItsc_s, 500);
+            }
+        }
+    }
+    return Ret_e;
 }
 
 /*********************************
@@ -929,8 +970,6 @@ static t_eReturnCode s_FMKHRT_SetBspHrTimInit( t_eFMKHRT_HighResIstc f_HrTimIstc
         if((bspRet_e == HAL_OK) && (Ret_e == RC_OK))
         {
             //---- We do it in interrupt mode, and we finish configuration in Callback ----//
-            //#warning('found out why calibration IT not working')
-            //bspRet_e = HAL_HRTIM_DLLCalibrationStart_IT(bspHrTimIsct_ps, FMKHRT_BASIC_CALIBRATION);
             bspRet_e = HAL_HRTIM_DLLCalibrationStart(bspHrTimIsct_ps, FMKHRT_BASIC_CALIBRATION);
             bspRet_e = HAL_HRTIM_PollForDLLCalibration(bspHrTimIsct_ps, 500);
         }
@@ -1481,6 +1520,49 @@ static void s_FMKHRT_BspCallbackMngmnt( HRTIM_HandleTypeDef * f_bspItsc_ps,
 
     return;
 }
+
+/*********************************
+ * s_FMKHRT_GetBspTimerIndex
+ *********************************/
+static t_eReturnCode s_FMKHRT_PerformDiagnostic(t_eFMKHRT_HighResIstc f_highResTimer_e)
+{
+    t_eReturnCode Ret_e;
+    t_sFMKHRT_HrTimInfo * highTimerInfo_ps;
+    t_uint32 currentTime_u32;
+    t_uint32 bspError_u32;
+
+    if(f_highResTimer_e >= FMKHRT_HIGH_RES_TIMER_NB)
+    {
+        ASSERT((t_uint16)0);
+        Ret_e = RC_ERROR_PARAM_INVALID;
+    }
+    else 
+    {
+        FMKCPU_GetTick(&currentTime_u32);
+        highTimerInfo_ps = (t_sFMKHRT_HrTimInfo *)(&g_HrTimInfo_as[f_highResTimer_e]);
+        //---- there is no ErrorCode field in bsp instance 
+        //      if an error occured it can be the DMA so check for master  & 
+        //      slave the DMA error code, as we don't currently used it we just check the state ----//
+        if((highTimerInfo_ps->bspItsc_s.State != HAL_HRTIM_STATE_READY)
+        || (highTimerInfo_ps->bspItsc_s.State != HAL_HRTIM_STATE_BUSY))
+        {
+            APPSDM_ReportDiagEvnt(  APPSDM_DIAG_ITEM_FMK_HRT_OPE_ERROR,
+                                    APPSDM_DIAG_ITEM_REPORT_FAIL,
+                                    (t_uint16)f_highResTimer_e,
+                                    (t_uint16)highTimerInfo_ps->bspItsc_s.State);
+        }
+        else 
+        {
+            APPSDM_ReportDiagEvnt(  APPSDM_DIAG_ITEM_FMK_HRT_OPE_ERROR,
+                                    APPSDM_DIAG_ITEM_REPORT_PASS,
+                                    (t_uint16)f_highResTimer_e,
+                                    (t_uint16)0);
+            highTimerInfo_ps->errDetected_b = (t_bool)FALSE;
+        }
+    }
+
+    return Ret_e;
+}
 /*********************************
  * s_FMKHRT_GetBspTimerIndex
  *********************************/
@@ -1950,6 +2032,30 @@ void HAL_HRTIM_DLLCalibrationReadyCallback(HRTIM_HandleTypeDef *hhrtim)
     }
 
     return;
+}
+
+/**
+ * @brief Callback called whenever an error occured.
+ */
+void HAL_HRTIM_ErrorCallback(HRTIM_HandleTypeDef *hhrtim)
+{
+    t_uint8 idxHrIsct_u8 = (t_uint8)0;
+    t_eFMKHRT_HighResIstc HrTimIstc_e = FMKHRT_HIGH_RES_TIMER_NB;
+
+    //----- Find Timer Instance ----//
+    for(idxHrIsct_u8 = (t_uint8)0 ; idxHrIsct_u8 < (t_uint8)FMKHRT_HIGH_RES_TIMER_NB ; idxHrIsct_u8++)
+    {
+        if((&g_HrTimInfo_as[idxHrIsct_u8].bspItsc_s) == (HRTIM_HandleTypeDef *)hhrtim)
+        {
+            HrTimIstc_e = (t_eFMKHRT_HighResIstc)idxHrIsct_u8;
+            break;
+        }
+    }
+    if(HrTimIstc_e != FMKHRT_HIGH_RES_TIMER_NB)
+    {
+        g_HrTimInfo_as[HrTimIstc_e].errDetected_b = (t_bool)TRUE;
+        FMKCPU_GetTick(&g_HrTimInfo_as[HrTimIstc_e].lastCbError_u32);
+    }
 }
 //************************************************************************************
 // End of File
