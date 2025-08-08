@@ -77,7 +77,7 @@
      */
     typedef struct 
     {
-        t_uint32 frequency_u32;     /**< Update Frequency of the PWM */
+        t_float32 frequency_f32;     /**< Update Frequency of the PWM */
         t_uint16 dutyCycle_u16;     /**< Update Dutycycle of the PWM */
         t_uint16 nbPulses_u16;      /**< Update Numbers of pulses of the PWM */
     } t_sFMKHRT_PwmOpeVal;
