@@ -16,6 +16,8 @@
 // ********************************************************************
 // *                      Includes
 // ********************************************************************
+#include "APP_CFG/ConfigFiles/APPSYS_ConfigPublic.h"
+#if defined(APPSYS_MODULE_FMKHRT_ENABLE)
 #include "./FMK_HRT.h"
 #include "FMK_CFG/FMKCFG_ConfigFiles/FMKHRT_ConfigPrivate.h"
 
@@ -355,6 +357,7 @@ static t_eReturnCode s_FMKHRT_GetBspPolarity(   t_eFMKHRT_LinePolarity f_Polarit
 *
 *	@brief     Get the HRTIM & Slave Timer & Chhannel from a High Resolution Line.\n
 *
+*	@param[in]  f_HrTimClkPort_e      : enum value for timer, value from @ref t_eFMKTIM_Timer
 *	@param[in]  f_InterruptLine_e      : enum value for timer, value from @ref t_eFMKTIM_Timer
 *	@param[in]  f_EcdrCdg_ps           : Pointor to Encoder Configuration
 *
@@ -363,7 +366,8 @@ static t_eReturnCode s_FMKHRT_GetBspPolarity(   t_eFMKHRT_LinePolarity f_Polarit
 *  @retval RC_ERROR_WRONG_STATE              @ref RC_ERROR_WRONG_STATE
 *  @retval RC_ERROR_WRONG_RESULT             @ref RC_ERROR_WRONG_RESULT
 */
-static t_eReturnCode s_FMKHRT_ComputeTimerFreqRange(t_eFMKHRT_FreqMulDiv f_CpuFreqMulDiv_e,
+static t_eReturnCode s_FMKHRT_ComputeTimerFreqRange(t_eFMKCPU_ClockPort f_HrTimClkPort_e,
+                                                    t_eFMKHRT_FreqMulDiv f_CpuFreqMulDiv_e,
                                                     t_sFMKHRT_TimSlaveInfo * f_slvInfo_ps);
 /**
 *
@@ -932,11 +936,13 @@ static t_eReturnCode  s_FMKHRT_Operational(void)
             {
                 Ret_e = s_FMKHRT_PerformDiagnostic(idxHrtim_u8);
             }
+#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
             if(hrtimInfo_ps->isCalibrate_b == (t_bool)FALSE)
             {
                 (void)HAL_HRTIM_DLLCalibrationStart(&hrtimInfo_ps->bspItsc_s, FMKHRT_BASIC_CALIBRATION);
                 (void)HAL_HRTIM_PollForDLLCalibration(&hrtimInfo_ps->bspItsc_s, 500);
             }
+#endif // FMKCPU_STM32_ECU_FAMILY_G4
         }
     }
     return Ret_e;
@@ -979,6 +985,7 @@ static t_eReturnCode s_FMKHRT_SetBspHrTimInit( t_eFMKHRT_HighResIstc f_HrTimIstc
             Ret_e = FMKCPU_Set_NVICState(g_HrTimInfo_as[f_HrTimIstc_e].mstInfo_s.c_IRQNType_e,
                                         FMKCPU_NVIC_OPE_ENABLE);
         }
+#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
         //---- Set the calibration for Instance Timer ----//
         if((bspRet_e == HAL_OK) && (Ret_e == RC_OK))
         {
@@ -986,6 +993,7 @@ static t_eReturnCode s_FMKHRT_SetBspHrTimInit( t_eFMKHRT_HighResIstc f_HrTimIstc
             bspRet_e = HAL_HRTIM_DLLCalibrationStart(bspHrTimIsct_ps, FMKHRT_BASIC_CALIBRATION);
             bspRet_e = HAL_HRTIM_PollForDLLCalibration(bspHrTimIsct_ps, 500);
         }
+#endif // FMKCPU_STM32_ECU_FAMILY_G4
         if(bspRet_e != HAL_OK)
         {
             Ret_e = RC_ERROR_WRONG_RESULT;
@@ -1039,7 +1047,9 @@ static t_eReturnCode s_FMKHRT_ConfigureSlaveTimer(  t_sFMKHRT_HrTimInfo * f_HrTi
         //---- Compute Timer Frequency for later used ----//
         if(Ret_e == RC_OK)
         {
-            Ret_e = s_FMKHRT_ComputeTimerFreqRange(f_CpuFreqMulDiv_e, slvInfo_ps);
+            Ret_e = s_FMKHRT_ComputeTimerFreqRange( f_HrTimInfo_ps->c_clkPort_e,
+                                                    f_CpuFreqMulDiv_e, 
+                                                    slvInfo_ps);
         }
 
         //---- Get ARR register ----//
@@ -1620,9 +1630,12 @@ static t_eReturnCode s_FMKHRT_GetBspTimerIndex( t_eFMKHRT_HighResSlvTim f_hrSlvT
             case FMKHRT_HRTIM_SLAVE_5:
                 *f_bspTimerIdx_pu32 = HRTIM_TIMERINDEX_TIMER_E;
                 break;
+// idem code specific gen code
+#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
             case FMKHRT_HRTIM_SLAVE_6:
                 *f_bspTimerIdx_pu32 = HRTIM_TIMERINDEX_TIMER_F;
                 break;
+#endif // FMKCPU_STM32_ECU_FAMILY_G4
             case FMKHRT_HRTIM_SLAVE_NB:
             default:
                 Ret_e = RC_ERROR_NOT_SUPPORTED;
@@ -1659,6 +1672,7 @@ static t_eReturnCode s_FMKHRT_GetPrescalerRatio(t_eFMKHRT_FreqMulDiv f_CpuFreqMu
             case FMKHRT_FREQRANGE_DIV_1:
                 *f_PscRatio_pu32 = HRTIM_PRESCALERRATIO_DIV1;
                 break;
+#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
             case FMKHRT_FREQRANGE_MUL_2:
                 *f_PscRatio_pu32 = HRTIM_PRESCALERRATIO_MUL2;
                 break;
@@ -1674,6 +1688,7 @@ static t_eReturnCode s_FMKHRT_GetPrescalerRatio(t_eFMKHRT_FreqMulDiv f_CpuFreqMu
             case FMKHRT_FREQRANGE_MUL_32:
                 *f_PscRatio_pu32 = HRTIM_PRESCALERRATIO_MUL32;
                 break;
+#endif // FMKCPU_STM32_ECU_FAMILY_G4
             default:
                 Ret_e = RC_ERROR_NOT_SUPPORTED;
 
@@ -1726,13 +1741,16 @@ static t_eReturnCode s_FMKHRT_GetBspPeriod( t_uint16 f_TimFreqMHz_16,
 /*********************************
  * s_FMKHRT_ComputeTimerFreqRange
  *********************************/
-static t_eReturnCode s_FMKHRT_ComputeTimerFreqRange(t_eFMKHRT_FreqMulDiv f_CpuFreqMulDiv_e,
+static t_eReturnCode s_FMKHRT_ComputeTimerFreqRange(t_eFMKCPU_ClockPort f_HrTimClkPort_e,
+                                                    t_eFMKHRT_FreqMulDiv f_CpuFreqMulDiv_e,
                                                     t_sFMKHRT_TimSlaveInfo * f_slvInfo_ps)
 
 {
     t_eReturnCode Ret_e = RC_OK;
-    t_uint16 systemFreqMHz_u16 = (t_uint16)0;
-    t_uint16 timFreqMHz_u16;
+    t_eFMKCPU_SysClkOsc oscTimerSrc_e;
+    t_uint16 hrtimFreqMHz_u16 = (t_uint16)0;
+    t_uint16 SysFreqMHz_u16 = (t_uint16)0;
+    t_uint16 slvFreqMHz_u16;
 
     if(f_slvInfo_ps == (t_sFMKHRT_TimSlaveInfo *)NULL)
     {
@@ -1741,48 +1759,70 @@ static t_eReturnCode s_FMKHRT_ComputeTimerFreqRange(t_eFMKHRT_FreqMulDiv f_CpuFr
     }
     if(Ret_e == RC_OK)
     {
-        Ret_e = FMKCPU_GetSysClkValue(FMKCPU_SYS_CLOCK_SYSTEM, (&systemFreqMHz_u16));   
+        Ret_e = FMKCPU_GetOscRccSrc(f_HrTimClkPort_e, &oscTimerSrc_e);
+
+        if(Ret_e == RC_OK)
+        {
+            Ret_e = FMKCPU_GetSysClkValue(oscTimerSrc_e, &hrtimFreqMHz_u16);
+        }
+        if(Ret_e == RC_OK)
+        {
+            Ret_e = FMKCPU_GetSysClkValue(FMKCPU_SYS_CLOCK_SYSTEM, &SysFreqMHz_u16);
+        }
+        if(Ret_e == RC_OK)
+        {
+            //---- see documentation fore more info, but basically 
+            //      the basic timer frequency is double whenever the sysclck value of the bus for 
+            //      the timer is < to the sys clock ----//
+            if(SysFreqMHz_u16 > hrtimFreqMHz_u16)
+            {
+                hrtimFreqMHz_u16 = (t_uint32)((t_uint32)2 * (t_uint32)hrtimFreqMHz_u16);
+            }
+        }
+
     }
     if(Ret_e == RC_OK)
     {
         //----- In theory we don't passed 0xFFFF in value even with 500 MHz system.
         switch(f_CpuFreqMulDiv_e)
         {
+#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
             case FMKHRT_FREQRANGE_MUL_32:
-                timFreqMHz_u16 = (t_uint16)(systemFreqMHz_u16 * (t_uint16)32);
+                slvFreqMHz_u16 = (t_uint16)(hrtimFreqMHz_u16 * (t_uint16)32);
                 break;
             case FMKHRT_FREQRANGE_MUL_16:
-                timFreqMHz_u16 = (t_uint16)(systemFreqMHz_u16 * (t_uint16)16);
+                slvFreqMHz_u16 = (t_uint16)(hrtimFreqMHz_u16 * (t_uint16)16);
                 break;
             case FMKHRT_FREQRANGE_MUL_8:
-                timFreqMHz_u16 = (t_uint16)(systemFreqMHz_u16 * (t_uint16)8);
+                slvFreqMHz_u16 = (t_uint16)(hrtimFreqMHz_u16 * (t_uint16)8);
                 break;
             case FMKHRT_FREQRANGE_MUL_4:
-                timFreqMHz_u16 = (t_uint16)(systemFreqMHz_u16 * (t_uint16)4);
+                slvFreqMHz_u16 = (t_uint16)(hrtimFreqMHz_u16 * (t_uint16)4);
                 break;
             case FMKHRT_FREQRANGE_MUL_2:
-                timFreqMHz_u16 = (t_uint16)(systemFreqMHz_u16 * (t_uint16)2);
+                slvFreqMHz_u16 = (t_uint16)(hrtimFreqMHz_u16 * (t_uint16)2);
                 break;
+#endif // FMKCPU_STM32_ECU_FAMILY_G4
             case FMKHRT_FREQRANGE_DIV_1:
-                timFreqMHz_u16 = (t_uint16)(systemFreqMHz_u16);
+                slvFreqMHz_u16 = (t_uint16)(hrtimFreqMHz_u16);
                 break;
             case FMKHRT_FREQRANGE_DIV_2:
-                timFreqMHz_u16 = (t_uint16)(systemFreqMHz_u16 / (t_uint16)2);
+                slvFreqMHz_u16 = (t_uint16)(hrtimFreqMHz_u16 / (t_uint16)2);
                 break;
             case FMKHRT_FREQRANGE_DIV_4:
-                timFreqMHz_u16 = (t_uint16)(systemFreqMHz_u16 / (t_uint16)4);
+                slvFreqMHz_u16 = (t_uint16)(hrtimFreqMHz_u16 / (t_uint16)4);
                 break;
             default:
-                timFreqMHz_u16 = (t_uint16)0;
+                slvFreqMHz_u16 = (t_uint16)0;
                 Ret_e = RC_ERROR_NOT_SUPPORTED;
         }
         if(Ret_e == RC_OK)
         {
-            f_slvInfo_ps->minFreqAccept_u32 = (t_uint32)((t_uint32)(timFreqMHz_u16  * CST_MHZ_TO_HZ)/ 
+            f_slvInfo_ps->minFreqAccept_u32 = (t_uint32)((t_uint32)(slvFreqMHz_u16  * CST_MHZ_TO_HZ)/ 
                                                                     FMKHRT_PWM_MAX_ARR_VALUE);
-            f_slvInfo_ps->maxFreqAccept_u32 = (t_uint32)((t_uint32)(timFreqMHz_u16 * CST_MHZ_TO_HZ)/ 
+            f_slvInfo_ps->maxFreqAccept_u32 = (t_uint32)((t_uint32)(slvFreqMHz_u16 * CST_MHZ_TO_HZ)/ 
                                                                     FMKHRT_PWM_MIN_ARR_VALUE);
-           f_slvInfo_ps->timFreqMHz_u16 = timFreqMHz_u16;
+            f_slvInfo_ps->timFreqMHz_u16 = slvFreqMHz_u16;
         }
     }
 
@@ -1821,9 +1861,12 @@ static t_eReturnCode s_FMKHRT_GetEnumTimeIdxFromBsp(    t_uint32 f_bspTimIdx_u32
             case HRTIM_TIMERINDEX_TIMER_E:
                 *f_timSlv_pe = FMKHRT_HRTIM_SLAVE_5;
                 break;
+// make this in code gen
+#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
             case HRTIM_TIMERINDEX_TIMER_F:
                 *f_timSlv_pe = FMKHRT_HRTIM_SLAVE_6;
                 break;
+#endif
             case HRTIM_TIMERINDEX_MASTER:
             default:
                 *f_timSlv_pe = FMKHRT_HRTIM_SLAVE_NB;
@@ -1987,6 +2030,7 @@ static t_eReturnCode s_FMKHRT_GetBspChannel(t_eFMKHRT_HighResSlvTim f_hrSlvTim_e
                 
                 break;
             }
+#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
             case FMKHRT_HRTIM_SLAVE_6:
             {
                 if(f_chnl_e == FMKHRT_HRTIM_CHANNEL_1)
@@ -2002,9 +2046,9 @@ static t_eReturnCode s_FMKHRT_GetBspChannel(t_eFMKHRT_HighResSlvTim f_hrSlvTim_e
                     Ret_e = RC_ERROR_NOT_SUPPORTED;
                     *f_bspOutputChnl_pu32 = (t_uint32)0;
                 }
-                
                 break;
             }
+#endif // FMKCPU_STM32_ECU_FAMILY_G4
             case FMKHRT_HRTIM_SLAVE_NB:
             default:
                 Ret_e = RC_ERROR_NOT_SUPPORTED;
@@ -2076,6 +2120,8 @@ void HAL_HRTIM_ErrorCallback(HRTIM_HandleTypeDef *hhrtim)
         FMKCPU_GetTick(&g_HrTimInfo_as[HrTimIstc_e].lastCbError_u32);
     }
 }
+
+#endif // APPSYS_MODULE_FMKHRT_ENABLE
 //************************************************************************************
 // End of File
 //************************************************************************************

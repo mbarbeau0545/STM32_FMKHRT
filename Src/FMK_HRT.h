@@ -18,6 +18,7 @@
     // ********************************************************************
     // *                      Includes
     // ********************************************************************
+    #include "APP_CFG/ConfigFiles/APPSYS_ConfigPublic.h"
     #include "1_FMK/FMK_CFG/FMKCFG_ConfigFiles/FMKHRT_ConfigPublic.h"
     // ********************************************************************
     // *                      Defines
@@ -107,12 +108,13 @@
         FMKHRT_FREQRANGE_DIV_4 = 0x00,      /**< Main Cpu Frequency will be divided by 4,  */
         FMKHRT_FREQRANGE_DIV_2,      /**< Main Cpu Frequency will be divided by 4,  */
         FMKHRT_FREQRANGE_DIV_1,      /**< Main Cpu Frequency will be divided by 4,  */
+#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
         FMKHRT_FREQRANGE_MUL_2,      /**< Main Cpu Frequency will be divided by 4,  */
         FMKHRT_FREQRANGE_MUL_4,      /**< Main Cpu Frequency will be divided by 4,  */
         FMKHRT_FREQRANGE_MUL_8,      /**< Main Cpu Frequency will be divided by 4,  */
         FMKHRT_FREQRANGE_MUL_16,      /**< Main Cpu Frequency will be divided by 4,  */
         FMKHRT_FREQRANGE_MUL_32,      /**< Main Cpu Frequency will be divided by 4,  */
-        
+#endif // FMKCPU_STM32_ECU_FAMILY_G4
         FMKHRT_FREQRANGE_DIVMUL_NB,
     } t_eFMKHRT_FreqMulDiv;
 
@@ -129,6 +131,7 @@
     //********************************************************************************
     //                      Public functions - Prototyupes
     //********************************************************************************
+#if defined(APPSYS_MODULE_FMKHRT_ENABLE)
     /**
     *
     *	@brief      Perform all Init action for this module.\n
@@ -225,6 +228,7 @@
     *
     */
     HRTIM_HandleTypeDef * FMKHRT_PRIVATE_GetHandleTypeDef(t_eFMKHRT_HighResLine f_HRLine_e);
+#endif // APPSYS_MODULE_FMKHRT_EN
 #endif // FMK_HRT_H_INCLUDED           
 //************************************************************************************
 // End of File
