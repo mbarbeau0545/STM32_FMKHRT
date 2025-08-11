@@ -570,7 +570,7 @@ t_eReturnCode FMKHRT_ConfigurePwmLine(  t_eFMKHRT_HighResLine f_HRLine_e,
             Ret_e = s_FMKHRT_ConfigureSlaveTimer(   (&g_HrTimInfo_as[hrTimIstc_e]),
                                                     hrSlvTim_e,
                                                     f_CpuFreqMulDiv_e,
-                                                    f_PwmCfg_s.frequency_u32,
+                                                    f_PwmCfg_s.frequency_f32,
                                                     FMKHRT_HW_MODE_PWM);
             if(Ret_e == RC_OK)
             {
@@ -582,7 +582,7 @@ t_eReturnCode FMKHRT_ConfigurePwmLine(  t_eFMKHRT_HighResLine f_HRLine_e,
         {  
             hwModeCfg_u.pwmCfg_s.deadTime_u32  = f_PwmCfg_s.deadTime_u32;
             hwModeCfg_u.pwmCfg_s.polarity_e  = f_PwmCfg_s.polarity_e;
-            hwModeCfg_u.pwmCfg_s.frequency_u32 = f_PwmCfg_s.frequency_u32; // not used
+            hwModeCfg_u.pwmCfg_s.frequency_f32 = f_PwmCfg_s.frequency_f32; // not used
 
             Ret_e = s_FMKHRT_ConfigureSlaveChannel( (&g_HrTimInfo_as[hrTimIstc_e]),
                                                     hrSlvTim_e,
