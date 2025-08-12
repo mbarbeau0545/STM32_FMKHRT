@@ -184,6 +184,7 @@ static t_sFMKHRT_HrTimInfo g_HrTimInfo_as[FMKHRT_HIGH_RES_TIMER_NB];
 /**
 * @brief Pulses left manamgent
 */
+t_bool g_isFirqtUG_ab[FMKHRT_HIGH_RES_TIMER_NB][FMKHRT_HRTIM_SLAVE_NB];
 t_uint32 g_SlvChnlTimPulsesRemain_ua32[FMKHRT_HIGH_RES_TIMER_NB][FMKHRT_HRTIM_SLAVE_NB][FMKHRT_HRTIM_CHANNEL_NB];
 //********************************************************************************
 //                      Local functions - Prototypes
@@ -425,6 +426,7 @@ t_eReturnCode FMKHRT_Init(void)
          g_HrTimInfo_as[idxHighResTim_u8].lastCbError_u32 = (t_uint32)0;
         for(idxHighSlvTim_u8 = (t_uint8)0; idxHighSlvTim_u8 < FMKHRT_HRTIM_SLAVE_NB ; idxHighSlvTim_u8++)
         {
+            g_isFirqtUG_ab[idxHighResTim_u8][idxHighSlvTim_u8] = (t_bool)TRUE;
             slvInfo_ps = (t_sFMKHRT_TimSlaveInfo *)(&g_HrTimInfo_as[idxHighResTim_u8].slvInfo_as[idxHighSlvTim_u8]);
 
             slvInfo_ps->isConfigured_b = False;
@@ -1451,8 +1453,14 @@ static void s_FMKHRT_BspCallbackMngmnt( HRTIM_HandleTypeDef * f_bspItsc_ps,
             {
                 case FMKHRT_BSP_CB_REPETITION_EVNT:
                 {
+                    
                     if(isMasterTrigg_b == (t_bool)False)
                     {    
+                        if(g_isFirqtUG_ab[idxHrIsct_u8][slvTim_e] == (t_bool)TRUE)
+                        {
+                            g_isFirqtUG_ab[idxHrIsct_u8][slvTim_e] = FALSE;
+                            return;
+                        }
                         //---- See if it rest pulses to set ----//
                         
                         for(idxChnl_u8 = (t_uint8)0 ; 
