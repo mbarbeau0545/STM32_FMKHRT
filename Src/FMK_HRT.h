@@ -229,7 +229,7 @@
     *
     */
     HRTIM_HandleTypeDef * FMKHRT_PRIVATE_GetHandleTypeDef(t_eFMKHRT_HighResLine f_HRLine_e);
-#endif // APPSYS_MODULE_FMKHRT_EN
+#endif // APPSYS_MODULE_FMKHRT_ENABLE
 #endif // FMK_HRT_H_INCLUDED           
 //************************************************************************************
 // End of File

@@ -707,11 +707,10 @@ t_eReturnCode FMKHRT_SetPwmLineWaveform(t_eFMKHRT_HighResLine f_HRLine_e,
             ASSERT((t_uint16)Ret_e);
             Ret_e = RC_ERROR_WRONG_CONFIG;
         }
-    }
-    //----- Get Timer Index -----//
-    if(Ret_e == RC_OK)
-    {
-        
+        else if(g_HrTimInfo_as[hrTimIstc_e].bspItsc_s.Lock == HAL_LOCKED)
+        {
+            Ret_e = RC_WARNING_BUSY;
+        }
     }
     if(Ret_e == RC_OK)
     {
@@ -1755,7 +1754,10 @@ static void s_FMKHRT_BspCallbackMngmnt( HRTIM_HandleTypeDef * f_bspItsc_ps,
                                                                         FMKHRT_CHNLST_DISACTIVATED);
                                 }
                             }
-                            //--- first shut down channel ----//
+                            //---- lock channel to prevent user do stuff inside 
+                            //      callback ----//
+                            g_HrTimInfo_as->bspItsc_s.Lock = HAL_LOCKED; 
+                            //--- then call user ----//
                             for(idxChnl_u8 = (t_uint8)0 ; 
                             idxChnl_u8 < FMKHRT_HRTIM_CHANNEL_NB ; 
                             idxChnl_u8++)
@@ -1769,6 +1771,7 @@ static void s_FMKHRT_BspCallbackMngmnt( HRTIM_HandleTypeDef * f_bspItsc_ps,
                                                                             FMKHRT_HR_LINE_EVNT_CB_PULSE_FINISH);
                                 }
                             }
+                            g_HrTimInfo_as->bspItsc_s.Lock = HAL_UNLOCKED;
                         }                            
                         
                     }
