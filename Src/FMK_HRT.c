@@ -122,12 +122,14 @@ typedef struct
     t_bool isConfigured_b;                      /**< Flag to know if timer is successfully configured */
     t_eFMKHRT_ChnlState state_e;                /**< Enum to know the state of a channel */
     t_cbFMKHRT_HrLineEvnt * evntCallback_pcb;     
+    t_bool isSyncOpeON_b;
 } t_sFMKHRT_ChnlInfo;
 /**
 * @brief High Resolution Slave Timer Information.
 */
 typedef struct
 {
+    t_eFMKHRT_HighResSlvTim selfId_e;
     t_eFMKCPU_IRQNType c_IRQNType_e;                      /**< Storage for IRQN (Interruption) */
     t_eFMKHRT_TimRunMode  runMode_e;                            /**< Storage for timer run mode */
     t_eFMKHRT_HwOpeTimer  HwOpeMode_e;                             /**< Storage for hardware mode  */
@@ -137,6 +139,10 @@ typedef struct
     t_uint16 timFreqMHz_u16;                                    /**< Storage for Timer Frequency */
     t_uint32 minFreqAccept_u32;                                 /**< Min frequency allowed based  timFreqMHz_u16 ARRAMax value*/
     t_uint32 maxFreqAccept_u32;                                 /**< Max frequency allowed based  timFreqMHz_u16 ARRAMax value*/
+    t_uint8 maskChnlState_u8;
+    t_bool isTimerRunnin_b;
+    t_bool SoftSyncMode_b;                                      /**< If set to true, in pulse mode, every channel configured are set & 
+                                                                reset at the same time from the softwrare */
 } t_sFMKHRT_TimSlaveInfo;
 
 
@@ -184,8 +190,12 @@ static t_sFMKHRT_HrTimInfo g_HrTimInfo_as[FMKHRT_HIGH_RES_TIMER_NB];
 /**
 * @brief Pulses left manamgent
 */
-t_bool g_isFirqtUG_ab[FMKHRT_HIGH_RES_TIMER_NB][FMKHRT_HRTIM_SLAVE_NB];
-t_uint32 g_SlvChnlTimPulsesRemain_ua32[FMKHRT_HIGH_RES_TIMER_NB][FMKHRT_HRTIM_SLAVE_NB][FMKHRT_HRTIM_CHANNEL_NB];
+static t_bool g_isFirqtUG_ab[FMKHRT_HIGH_RES_TIMER_NB][FMKHRT_HRTIM_SLAVE_NB];
+static t_uint32 g_SlvChnlTimPulsesRemain_ua32[FMKHRT_HIGH_RES_TIMER_NB][FMKHRT_HRTIM_SLAVE_NB];
+static t_eFMKHRT_HrTimChannel g_AllowTimChnlPulse_ae[FMKHRT_HIGH_RES_TIMER_NB][FMKHRT_HRTIM_SLAVE_NB];
+
+t_uint32 g_hrt_start_time_u32 = (t_uint32)0;
+t_uint32 g_hrt_end_time_u32 = (t_uint32)0;
 //********************************************************************************
 //                      Local functions - Prototypes
 //********************************************************************************
@@ -241,10 +251,6 @@ static t_eReturnCode s_FMKHRT_ConfigureSlaveTimer(  t_sFMKHRT_HrTimInfo * f_HrTi
 *	@param[in]  f_InterruptLine_e      : enum value for timer, value from @ref t_eFMKTIM_Timer
 *	@param[in]  f_EcdrCdg_ps           : Pointor to Encoder Configuration
 *
-*  @retval RC_OK                             @ref RC_OK
-*  @retval RC_ERROR_PARAM_INVALID            @ref RC_ERROR_PARAM_INVALID
-*  @retval RC_ERROR_WRONG_STATE              @ref RC_ERROR_WRONG_STATE
-*  @retval RC_ERROR_WRONG_RESULT             @ref RC_ERROR_WRONG_RESULT
 */
 static t_eReturnCode s_FMKHRT_ConfigureSlaveChannel(t_sFMKHRT_HrTimInfo * f_HrTimInfo_ps,
                                                     t_eFMKHRT_HighResSlvTim f_hrSlvTim_e,
@@ -269,6 +275,43 @@ static t_eReturnCode s_FMKHRT_SetHwOutputState( t_sFMKHRT_HrTimInfo * f_HrTimInf
                                                 t_eFMKHRT_TimRunMode f_runMode_e,
                                                 t_eFMKHRT_HwOpeTimer f_HwOpeTimer_e,
                                                 t_eFMKHRT_ChnlState f_state_e);
+
+/**
+*
+*	@brief     Get the HRTIM & Slave Timer & Chhannel from a High Resolution Line.\n
+*
+*	@param[in]  f_InterruptLine_e      : enum value for timer, value from @ref t_eFMKTIM_Timer
+*	@param[in]  f_EcdrCdg_ps           : Pointor to Encoder Configuration
+*
+*/
+static t_eReturnCode s_FMKHRT_UpdateFrequency(  t_eFMKHRT_HighResIstc f_hrlIscte_e,
+                                                t_sFMKHRT_TimSlaveInfo * f_slvInfo_ps,
+                                                t_float32 f_freqency_f32);
+/**
+*
+*	@brief     Get the HRTIM & Slave Timer & Chhannel from a High Resolution Line.\n
+*
+*	@param[in]  f_InterruptLine_e      : enum value for timer, value from @ref t_eFMKTIM_Timer
+*	@param[in]  f_EcdrCdg_ps           : Pointor to Encoder Configuration
+*
+*/
+static t_eReturnCode s_FMKHRT_UpdateDutyCycle(  t_eFMKHRT_HighResIstc f_hrlIscte_e,
+                                                t_sFMKHRT_TimSlaveInfo * f_slvInfo_ps,
+                                                t_eFMKHRT_HrTimChannel f_chnl_e,
+                                                t_uint16 f_dutycyle_u16);
+/**
+*
+*	@brief     Get the HRTIM & Slave Timer & Chhannel from a High Resolution Line.\n
+*
+*	@param[in]  f_InterruptLine_e      : enum value for timer, value from @ref t_eFMKTIM_Timer
+*	@param[in]  f_EcdrCdg_ps           : Pointor to Encoder Configuration
+*
+*/
+static t_eReturnCode s_FMKHRT_UpdatePulses( t_eFMKHRT_HighResIstc f_hrlIscte_e,
+                                            t_sFMKHRT_TimSlaveInfo * f_slvInfo_ps,
+                                            t_eFMKHRT_HrTimChannel f_chnl_e,
+                                            t_sFMKHRT_PwmOpeVal f_pwmSet_s,
+                                            t_uint8 f_maskUpdate_u8);
 /**
 *
 *	@brief     Get the HRTIM & Slave Timer & Chhannel from a High Resolution Line.\n
@@ -428,21 +471,28 @@ t_eReturnCode FMKHRT_Init(void)
         {
             g_isFirqtUG_ab[idxHighResTim_u8][idxHighSlvTim_u8] = (t_bool)TRUE;
             slvInfo_ps = (t_sFMKHRT_TimSlaveInfo *)(&g_HrTimInfo_as[idxHighResTim_u8].slvInfo_as[idxHighSlvTim_u8]);
-
+            slvInfo_ps->selfId_e = (t_eFMKHRT_HighResSlvTim)idxHighSlvTim_u8;
             slvInfo_ps->isConfigured_b = False;
             slvInfo_ps->isNVICEnable_b = False;
             slvInfo_ps->timFreqMHz_u16 = (t_uint16)0;
             slvInfo_ps->minFreqAccept_u32 = (t_uint32)0;
             slvInfo_ps->maxFreqAccept_u32 = (t_uint32)0;
+            slvInfo_ps->maskChnlState_u8 = (t_uint8)0;
+            slvInfo_ps->isTimerRunnin_b = (t_bool)0;
             slvInfo_ps->runMode_e = FMKHRT_RUN_MODE_POLL;
             slvInfo_ps->c_IRQNType_e = c_FmkHrt_HrTimCfg_as[idxHighResTim_u8].c_SlaveTimIRQNType_ae[idxHighSlvTim_u8];
             
             slvInfo_ps->HwOpeMode_e = FMKHRT_HW_OPE_TIM_BASIC;
+
+            g_AllowTimChnlPulse_ae[idxHighResTim_u8][idxHighSlvTim_u8] = FMKHRT_HRTIM_CHANNEL_NB;
+            g_SlvChnlTimPulsesRemain_ua32[idxHighResTim_u8][idxHighSlvTim_u8] = (t_uint32)0;
+
             for(idxHighChnl_u8 = (t_uint8)0; idxHighChnl_u8 < FMKHRT_HRTIM_CHANNEL_NB ; idxHighChnl_u8++)
             {
                 slvInfo_ps->chnlInfo_as[idxHighChnl_u8].isConfigured_b = False;
                 slvInfo_ps->chnlInfo_as[idxHighChnl_u8].state_e = FMKHRT_CHNLST_DISACTIVATED;
-                g_SlvChnlTimPulsesRemain_ua32[idxHighResTim_u8][idxHighSlvTim_u8][idxHighChnl_u8] = (t_uint32)0;
+                slvInfo_ps->chnlInfo_as[idxHighChnl_u8].isSyncOpeON_b = (t_bool)FALSE;
+                
             }
         }
     }
@@ -593,6 +643,12 @@ t_eReturnCode FMKHRT_ConfigurePwmLine(  t_eFMKHRT_HighResLine f_HRLine_e,
                                                     (&hwModeCfg_u));
             if(Ret_e == RC_OK)    
             {
+                //---- once the software sync is enable by a channel it 
+                //      cannot be disable by another channel configuration ----//
+                if(f_PwmCfg_s.enableSyncPulseChnlOpe_b == (t_bool)TRUE)
+                {
+                    slvInfo_ps->SoftSyncMode_b = f_PwmCfg_s.enableSyncPulseChnlOpe_b;
+                }
                 slvInfo_ps->chnlInfo_as[hrChnl_e].isConfigured_b = (t_bool)True;
                 slvInfo_ps->chnlInfo_as[hrChnl_e].evntCallback_pcb = 
                                             (t_cbFMKHRT_HrLineEvnt *)(f_pulseEvntCb_pcb);
@@ -620,11 +676,6 @@ t_eReturnCode FMKHRT_SetPwmLineWaveform(t_eFMKHRT_HighResLine f_HRLine_e,
     t_eFMKHRT_HighResIstc hrTimIstc_e;
     t_eFMKHRT_HighResSlvTim hrSlvTim_e;
     t_eFMKHRT_HrTimChannel hrChnl_e;
-    t_uint32 bspPeriod_u32;
-    t_uint32 bspTimerIdx_u32;
-    t_uint32 bspCompareUnit_u32;
-    t_uint32 bspCompareUnitVal_u32;
-    t_uint16 nbPulses_u16;
     t_sFMKHRT_TimSlaveInfo * slvTimInfo_ps;
     t_eFMKHRT_ChnlState setChnlState_e = FMKHRT_CHNLST_DISACTIVATED;
     
@@ -656,151 +707,56 @@ t_eReturnCode FMKHRT_SetPwmLineWaveform(t_eFMKHRT_HighResLine f_HRLine_e,
             ASSERT((t_uint16)Ret_e);
             Ret_e = RC_ERROR_WRONG_CONFIG;
         }
-    }
-    //----- Get Timer Index -----//
-    if(Ret_e == RC_OK)
-    {
-        Ret_e = s_FMKHRT_GetBspTimerIndex(hrSlvTim_e, (&bspTimerIdx_u32));
+        else if(g_HrTimInfo_as[hrTimIstc_e].bspItsc_s.Lock == HAL_LOCKED)
+        {
+            Ret_e = RC_WARNING_BUSY;
+        }
     }
     if(Ret_e == RC_OK)
     {
         slvTimInfo_ps = (t_sFMKHRT_TimSlaveInfo *)(&g_HrTimInfo_as[hrTimIstc_e].slvInfo_as[hrSlvTim_e]);
 
-        //----- compute stuff for later ----//
-        bspPeriod_u32 = __HAL_HRTIM_GETPERIOD(  (&g_HrTimInfo_as[hrTimIstc_e].bspItsc_s),
-                                                        bspTimerIdx_u32);
-        //---- Get the Compare Unit Channel ----//
-        ((hrChnl_e == FMKHRT_HRTIM_CHANNEL_1) ? 
-                (bspCompareUnit_u32 = HRTIM_COMPAREUNIT_1) : 
-                (bspCompareUnit_u32 = HRTIM_COMPAREUNIT_2));
-        
-        bspCompareUnitVal_u32 = __HAL_HRTIM_GETCOMPARE( (&g_HrTimInfo_as[hrTimIstc_e].bspItsc_s),
-                                                            bspTimerIdx_u32,
-                                                            bspCompareUnit_u32);
         //---- Update Stuff Depending On Mask Update ----//
         if(GETBIT(f_maskUpdate_u8, FMKHRT_BIT_PWM_FREQUENCY) == BIT_IS_SET_8B)
         {
-            if((t_uint32)f_PwmOpe_s.frequency_f32 > slvTimInfo_ps->maxFreqAccept_u32)
-            {
-                ASSERT((t_uint16)f_PwmOpe_s.frequency_f32);
-                f_PwmOpe_s.frequency_f32 = slvTimInfo_ps->maxFreqAccept_u32;
-            }
-            else if((t_uint32)f_PwmOpe_s.frequency_f32 < slvTimInfo_ps->minFreqAccept_u32)
-            {
-                ASSERT((t_uint16)f_PwmOpe_s.frequency_f32);
-                f_PwmOpe_s.frequency_f32 = slvTimInfo_ps->minFreqAccept_u32;
-            }
-
-            Ret_e = s_FMKHRT_GetBspPeriod(  slvTimInfo_ps->timFreqMHz_u16, 
-                                            (t_uint32)f_PwmOpe_s.frequency_f32,
-                                            (&bspPeriod_u32));
-                
+            Ret_e = s_FMKHRT_UpdateFrequency(   hrTimIstc_e,
+                                                slvTimInfo_ps,
+                                                f_PwmOpe_s.frequency_f32);
             if(Ret_e == RC_OK)
-            {       
-                __HAL_HRTIM_SETPERIOD((&g_HrTimInfo_as[hrTimIstc_e].bspItsc_s),
-                                        bspTimerIdx_u32,
-                                        bspPeriod_u32);
-                //----- Leave Channel State as Unchange ----//
+            {
                 setChnlState_e = slvTimInfo_ps->chnlInfo_as[hrChnl_e].state_e;
-            }  
+            }
         }
         if((GETBIT(f_maskUpdate_u8, FMKHRT_BIT_PWM_DUTYCYCLE) == BIT_IS_SET_8B)
         && f_PwmOpe_s.dutyCycle_u16 != (t_uint16)0)
         {
-            if(f_PwmOpe_s.dutyCycle_u16 > FMKHRT_PWM_MAX_DUTY_CYLCE)
-            {
-                Ret_e = RC_ERROR_PARAM_INVALID;
-                ASSERT((t_uint16)f_PwmOpe_s.dutyCycle_u16);
-            }
-            else 
-            {
-                //---- Calcul Nuw Value ----//
-                bspCompareUnitVal_u32 = (t_uint32)(bspPeriod_u32  * (t_uint32)f_PwmOpe_s.dutyCycle_u16 
-                                                    / FMKHRT_PWM_MAX_DUTY_CYLCE);
+            setChnlState_e = FMKHRT_CHNLST_ACTIVATED;
+            Ret_e = s_FMKHRT_UpdateDutyCycle(   hrTimIstc_e,
+                                                slvTimInfo_ps,
+                                                hrChnl_e,
+                                                f_PwmOpe_s.dutyCycle_u16);
                 
-                __HAL_HRTIM_SETCOMPARE( (&g_HrTimInfo_as[hrTimIstc_e].bspItsc_s),
-                                        bspTimerIdx_u32,
-                                        bspCompareUnit_u32,
-                                        (bspCompareUnitVal_u32 - 1));
-
-                //---- Update Channel State ----//
-                setChnlState_e = FMKHRT_CHNLST_ACTIVATED;
-            }
         }
         if(GETBIT(f_maskUpdate_u8, FMKHRT_BIT_PWM_NB_PULSES) == BIT_IS_SET_8B)
         {
-            if(f_PwmOpe_s.nbPulses_u16 >= CST_MAX_UINT_8BIT)
-            {
-                nbPulses_u16 = CST_MAX_UINT_8BIT;
-                g_SlvChnlTimPulsesRemain_ua32[hrTimIstc_e][hrSlvTim_e][hrChnl_e] = 
-                                                                            (t_uint32)(f_PwmOpe_s.nbPulses_u16 - nbPulses_u16);
-            }
-            else 
-            {
-                nbPulses_u16 = f_PwmOpe_s.nbPulses_u16;
-                g_SlvChnlTimPulsesRemain_ua32[hrTimIstc_e][hrSlvTim_e][hrChnl_e] = (t_uint32)0;
-            }
-            
-            //---- Esay PArt if the channel output is off ----//
-            if(slvTimInfo_ps->chnlInfo_as[hrChnl_e].state_e == FMKHRT_CHNLST_DISACTIVATED)
-            {
-                g_HrTimInfo_as[hrTimIstc_e].bspItsc_s.Instance->
-                    sTimerxRegs[bspTimerIdx_u32].REPxR = nbPulses_u16; // could be 0 doesn't matter
-                                                                                            
-            }
-            else // channel activated
-            {
-                //---- Shut Down Basic Timer  ----//
-                Ret_e = s_FMKHRT_SetHwOutputState(  (&g_HrTimInfo_as[hrTimIstc_e]),
-                                                    hrSlvTim_e,
-                                                    hrChnl_e,
-                                                    FMKHRT_RUN_MODE_IT,
-                                                    FMKHRT_HW_OPE_TIM_BASIC,
-                                                    FMKHRT_CHNLST_DISACTIVATED);
-                //---- Shut Down Ouput Pwm ----//
-                if(Ret_e == RC_OK)
-                {
-                    Ret_e = s_FMKHRT_SetHwOutputState(  (&g_HrTimInfo_as[hrTimIstc_e]),
-                                                        hrSlvTim_e,
-                                                        hrChnl_e,
-                                                        slvTimInfo_ps->runMode_e,
-                                                        slvTimInfo_ps->HwOpeMode_e,
-                                                        FMKHRT_CHNLST_DISACTIVATED);
-                }
-                if(Ret_e == RC_OK)
-                {
-                    g_HrTimInfo_as[hrTimIstc_e].bspItsc_s.Instance->
-                    sTimerxRegs[bspTimerIdx_u32].REPxR = nbPulses_u16;
-                }
-                
-            }
-            if(nbPulses_u16 > (t_uint16)0)
-            {
-                setChnlState_e = FMKHRT_CHNLST_ACTIVATED;
-                
-                //---- Reset Basic Timer Genration for RCR ----//
-                Ret_e = s_FMKHRT_SetHwOutputState(  (&g_HrTimInfo_as[hrTimIstc_e]),
-                                                    hrSlvTim_e,
-                                                    hrChnl_e,
-                                                    FMKHRT_RUN_MODE_IT,
-                                                    FMKHRT_HW_OPE_TIM_BASIC,
-                                                    FMKHRT_CHNLST_ACTIVATED);
-            }
-            else 
-            {
-                setChnlState_e = FMKHRT_CHNLST_DISACTIVATED;
-            }
+            Ret_e = s_FMKHRT_UpdatePulses(  hrTimIstc_e,
+                                            slvTimInfo_ps,
+                                            hrChnl_e,
+                                            f_PwmOpe_s,
+                                            f_maskUpdate_u8);   
         }
-        if(Ret_e == RC_OK)
+        else
         {
-            if(setChnlState_e != slvTimInfo_ps->chnlInfo_as[hrChnl_e].state_e)
+            if((Ret_e == RC_OK)
+            && (setChnlState_e != slvTimInfo_ps->chnlInfo_as[hrChnl_e].state_e))
             {
-                Ret_e = s_FMKHRT_SetHwOutputState(  (&g_HrTimInfo_as[hrTimIstc_e]),
-                                                    hrSlvTim_e,
+                slvTimInfo_ps->chnlInfo_as[hrChnl_e].isSyncOpeON_b = (t_bool)FALSE;
+                Ret_e = s_FMKHRT_SetHwOutputState(  &g_HrTimInfo_as[hrTimIstc_e],
+                                                    slvTimInfo_ps->selfId_e,
                                                     hrChnl_e,
                                                     slvTimInfo_ps->runMode_e,
                                                     slvTimInfo_ps->HwOpeMode_e,
-                                                    setChnlState_e);
+                                                    FMKHRT_CHNLST_ACTIVATED);
             }
         }
     }
@@ -825,8 +781,8 @@ t_eReturnCode FMKHRT_GetPwmLineWaveform(t_eFMKHRT_HighResLine f_HRLine_e,
     t_eFMKHRT_HrTimChannel hrChnl_e;
     t_uint32 bspPeriod_u32;
     t_uint32 bspTimerIdx_u32;
-    t_uint32 bspCompareUnit_u32;
-    t_uint32 bspCompareUnitVal_u32;
+    t_uint32 bspCompareUnit_u32 = HRTIM_COMPAREUNIT_1;
+    t_uint32 bspCompareUnitVal_u32 = (t_uint32)0;
     t_sFMKHRT_TimSlaveInfo * slvTimInfo_ps;
     
 
@@ -1108,7 +1064,7 @@ static t_eReturnCode s_FMKHRT_ConfigureSlaveTimer(  t_sFMKHRT_HrTimInfo * f_HrTi
                 bspTimCfgSpec_s.PreloadEnable = HRTIM_PRELOAD_DISABLED;
                 bspTimCfgSpec_s.UpdateGating = HRTIM_UPDATEGATING_INDEPENDENT;
                 bspTimCfgSpec_s.BurstMode = HRTIM_TIMERBURSTMODE_MAINTAINCLOCK;
-                bspTimCfgSpec_s.RepetitionUpdate = HRTIM_UPDATEONREPETITION_DISABLED;
+                bspTimCfgSpec_s.RepetitionUpdate = HRTIM_UPDATEONREPETITION_ENABLED;
                 bspTimCfgSpec_s.ResetUpdate = HRTIM_TIMUPDATEONRESET_DISABLED;
                 bspTimCfgSpec_s.InterruptRequests = HRTIM_TIM_IT_NONE;
                 bspTimCfgSpec_s.PushPull = HRTIM_TIMPUSHPULLMODE_DISABLED;
@@ -1306,6 +1262,10 @@ static t_eReturnCode s_FMKHRT_SetHwOutputState( t_sFMKHRT_HrTimInfo * f_HrTimInf
         //----- update channel state only if it's configured as so ----//
         if(f_state_e == FMKHRT_CHNLST_ACTIVATED)
         {
+            if(f_runMode_e == slvTimInfo_ps->runMode_e)
+            {
+                slvTimInfo_ps->maskChnlState_u8 |= (t_uint8)(1 << (t_uint8)f_chnl_e);
+            }
             if((f_runMode_e != FMKHRT_RUN_MODE_POLL)
             && (slvTimInfo_ps->isNVICEnable_b == (t_bool)False))
             {
@@ -1349,6 +1309,10 @@ static t_eReturnCode s_FMKHRT_SetHwOutputState( t_sFMKHRT_HrTimInfo * f_HrTimInf
         }
         else 
         {
+            if(f_runMode_e == slvTimInfo_ps->runMode_e)
+            {
+                slvTimInfo_ps->maskChnlState_u8 &= ~(t_uint8)(1 << (t_uint8)f_chnl_e);
+            }
             if((f_runMode_e != FMKHRT_RUN_MODE_POLL)
             && (slvTimInfo_ps->isNVICEnable_b == (t_bool)True))
             {
@@ -1398,11 +1362,276 @@ static t_eReturnCode s_FMKHRT_SetHwOutputState( t_sFMKHRT_HrTimInfo * f_HrTimInf
         if((f_HwOpeTimer_e == slvTimInfo_ps->HwOpeMode_e) && (Ret_e == RC_OK))
         {
             slvTimInfo_ps->chnlInfo_as[f_chnl_e].state_e = f_state_e;
+            slvTimInfo_ps->isTimerRunnin_b =
+                    (slvTimInfo_ps->maskChnlState_u8 == (t_uint16)0)? False : True;
+                    
         }
     }
     
 
     return Ret_e;    
+}
+
+/*********************************
+ * s_FMKHRT_UpdateFrequency
+ *********************************/
+static t_eReturnCode s_FMKHRT_UpdateFrequency(  t_eFMKHRT_HighResIstc f_hrlIscte_e,
+                                                t_sFMKHRT_TimSlaveInfo * f_slvInfo_ps,
+                                                t_float32 f_freqency_f32)
+{
+    t_eReturnCode Ret_e;
+    t_uint32 bspPeriod_u32;
+    t_uint32 bspTimerIdx_u32 = (t_uint32)0;
+
+    if(f_slvInfo_ps == (t_sFMKHRT_TimSlaveInfo *)NULL)
+    {
+        Ret_e = RC_ERROR_PTR_NULL;
+        ASSERT((t_uint16)0);
+    }
+    else if (f_hrlIscte_e >= FMKHRT_HIGH_RES_TIMER_NB)
+    {
+        Ret_e = RC_ERROR_PARAM_INVALID;
+        ASSERT((t_uint16)0);
+    }
+    else 
+    {
+        Ret_e = s_FMKHRT_GetBspTimerIndex(f_slvInfo_ps->selfId_e, (&bspTimerIdx_u32));
+        if(Ret_e == RC_OK)
+        {
+            if((t_uint32)f_freqency_f32 > f_slvInfo_ps->maxFreqAccept_u32)
+            {
+                ASSERT((t_uint16)f_freqency_f32);
+                f_freqency_f32 = f_slvInfo_ps->maxFreqAccept_u32;
+            }
+            else if((t_uint32)f_freqency_f32 < f_slvInfo_ps->minFreqAccept_u32)
+            {
+                ASSERT((t_uint16)f_freqency_f32);
+                f_freqency_f32 = f_slvInfo_ps->minFreqAccept_u32;
+            }
+
+            Ret_e = s_FMKHRT_GetBspPeriod(  f_slvInfo_ps->timFreqMHz_u16, 
+                                            (t_uint32)f_freqency_f32,
+                                            (&bspPeriod_u32)); 
+            if(Ret_e == RC_OK)
+            {       
+                __HAL_HRTIM_SETPERIOD((&g_HrTimInfo_as[f_hrlIscte_e].bspItsc_s),
+                                        bspTimerIdx_u32,
+                                        (bspPeriod_u32));
+            }
+        }
+    }
+
+    return Ret_e;
+}
+
+/*********************************
+ * s_FMKHRT_UpdateDutyCycle
+ *********************************/
+static t_eReturnCode s_FMKHRT_UpdateDutyCycle(  t_eFMKHRT_HighResIstc f_hrlIscte_e,
+                                                t_sFMKHRT_TimSlaveInfo * f_slvInfo_ps,
+                                                t_eFMKHRT_HrTimChannel f_chnl_e,
+                                                t_uint16 f_dutycyle_u16)
+{
+    t_eReturnCode Ret_e;
+    t_uint32 bspCompareUnitVal_u32;
+    t_uint32 bspCompareUnit_u32;
+    t_uint32 bspPeriod_u32;
+    t_uint32 bspTimerIdx_u32 = (t_uint32)0;
+
+    if(f_slvInfo_ps == (t_sFMKHRT_TimSlaveInfo *)NULL)
+    {
+        Ret_e = RC_ERROR_PTR_NULL;
+        ASSERT((t_uint16)0);
+    }
+    else if ((f_hrlIscte_e >= FMKHRT_HIGH_RES_TIMER_NB)
+    ||      ((f_dutycyle_u16 > FMKHRT_PWM_MAX_DUTY_CYLCE)))
+    {
+        ASSERT((t_uint16)f_dutycyle_u16);
+        Ret_e = RC_ERROR_PARAM_INVALID;
+    }
+    else
+    {
+        Ret_e = s_FMKHRT_GetBspTimerIndex(f_slvInfo_ps->selfId_e, &bspTimerIdx_u32);
+        if(Ret_e == RC_OK)
+        {
+            bspPeriod_u32 = __HAL_HRTIM_GETPERIOD(  (&g_HrTimInfo_as[f_hrlIscte_e].bspItsc_s),
+                                                    bspTimerIdx_u32);
+            bspCompareUnitVal_u32 = (t_uint32)(bspPeriod_u32  * (t_uint32)f_dutycyle_u16 
+                                                    / FMKHRT_PWM_MAX_DUTY_CYLCE);
+            
+            ((f_chnl_e == FMKHRT_HRTIM_CHANNEL_1) ? 
+                (bspCompareUnit_u32 = HRTIM_COMPAREUNIT_1) : 
+                (bspCompareUnit_u32 = HRTIM_COMPAREUNIT_2));
+            
+            __HAL_HRTIM_SETCOMPARE( (&g_HrTimInfo_as[f_hrlIscte_e].bspItsc_s),
+                                    bspTimerIdx_u32,
+                                    HRTIM_COMPAREUNIT_1,
+                                    (bspCompareUnitVal_u32 - 1));
+        }
+    }
+
+    return Ret_e;
+}
+
+/*********************************
+ * s_FMKHRT_UpdatePulses
+ *********************************/
+static t_eReturnCode s_FMKHRT_UpdatePulses( t_eFMKHRT_HighResIstc f_hrlIscte_e,
+                                            t_sFMKHRT_TimSlaveInfo * f_slvInfo_ps,
+                                            t_eFMKHRT_HrTimChannel f_chnl_e,
+                                            t_sFMKHRT_PwmOpeVal f_pwmSet_s,
+                                            t_uint8 f_maskUpdate_u8)
+{
+    t_eReturnCode Ret_e;
+    t_uint8 idxChnl_u8;
+    t_uint8 startIdx_u8;
+    t_uint8 endIdx_u8;
+    t_uint16 nbPulses_u16;
+    t_uint32 bspTImerIdx_u32 = (t_uint32)0;
+    t_eFMKHRT_HrTimChannel AllowPulseChnl_e;
+
+    if(f_slvInfo_ps == (t_sFMKHRT_TimSlaveInfo *)NULL)
+    {
+        Ret_e = RC_ERROR_PTR_NULL;
+        ASSERT((t_uint16)0);
+    }
+    else if((f_hrlIscte_e >= FMKHRT_HIGH_RES_TIMER_NB)
+    ||      (f_chnl_e >= FMKHRT_HRTIM_CHANNEL_NB))
+    {
+        Ret_e = RC_ERROR_PARAM_INVALID;
+        ASSERT((t_uint16)f_hrlIscte_e);
+    }
+    else if((g_AllowTimChnlPulse_ae[f_hrlIscte_e][f_slvInfo_ps->selfId_e] !=
+                                                    FMKHRT_HRTIM_CHANNEL_NB)
+    &&      (g_AllowTimChnlPulse_ae[f_hrlIscte_e][f_slvInfo_ps->selfId_e] !=
+                                                    f_chnl_e)
+    &&      (f_slvInfo_ps->SoftSyncMode_b == (t_bool)FALSE))
+    {
+        Ret_e = RC_ERROR_NOT_ALLOWED;
+        ASSERT((t_uint16)0);
+    }
+    else
+    {
+        Ret_e = RC_OK;
+        if(f_slvInfo_ps->SoftSyncMode_b == (t_bool)TRUE)
+        {
+            startIdx_u8 = (t_uint8)FMKHRT_HRTIM_CHANNEL_1;
+            endIdx_u8 = (t_uint8)FMKHRT_HRTIM_CHANNEL_NB;
+        }
+        else 
+        {
+            g_AllowTimChnlPulse_ae[f_hrlIscte_e][f_slvInfo_ps->selfId_e] =
+                                                                    f_chnl_e;
+            startIdx_u8 = (t_uint8)f_chnl_e;
+            endIdx_u8 = (startIdx_u8 + (t_uint8)1);
+        }
+
+        AllowPulseChnl_e = g_AllowTimChnlPulse_ae[f_hrlIscte_e][f_slvInfo_ps->selfId_e];
+        //---- we want to stop the genration of the pulse
+        //      if timer running and user wants to stop it nbPulses = 0 
+        //      if timer running user wants to set another set pulse and not wait this 
+        //      this current burst pulse is done ----//
+        if(((f_slvInfo_ps->isTimerRunnin_b == (t_bool)TRUE)
+        && (f_slvInfo_ps->SoftSyncMode_b == (t_bool)FALSE)
+        && (AllowPulseChnl_e != FMKHRT_HRTIM_CHANNEL_NB)
+        && (GETBIT(f_slvInfo_ps->maskChnlState_u8,
+                AllowPulseChnl_e) == BIT_IS_SET_16B))
+        || ((f_slvInfo_ps->isTimerRunnin_b == (t_bool)TRUE)
+        && (f_pwmSet_s.nbPulses_u16 == (t_uint16)0)))
+        {
+            Ret_e = s_FMKHRT_SetHwOutputState(  (&g_HrTimInfo_as[f_hrlIscte_e]),
+                                                f_slvInfo_ps->selfId_e,
+                                                f_chnl_e,
+                                                FMKHRT_RUN_MODE_IT,
+                                                FMKHRT_HW_OPE_TIM_BASIC,
+                                                FMKHRT_CHNLST_DISACTIVATED);
+            for(idxChnl_u8 = startIdx_u8 ; 
+            (idxChnl_u8 < endIdx_u8) 
+            && (Ret_e == RC_OK) ; 
+            idxChnl_u8++)
+            {
+                if((f_slvInfo_ps->chnlInfo_as[idxChnl_u8].isConfigured_b == (t_bool)TRUE)
+                && f_slvInfo_ps->chnlInfo_as[idxChnl_u8].isSyncOpeON_b == (t_bool)TRUE)
+                {
+                    Ret_e = s_FMKHRT_SetHwOutputState(  (&g_HrTimInfo_as[f_hrlIscte_e]),
+                                                        f_slvInfo_ps->selfId_e,
+                                                        idxChnl_u8,
+                                                        f_slvInfo_ps->runMode_e,
+                                                        f_slvInfo_ps->HwOpeMode_e,
+                                                        FMKHRT_CHNLST_DISACTIVATED);
+                }
+            }
+        }
+        //--- if the timer is not running, no matter the SoftSyncMode and 
+        //          pulse are > 0, we enter
+        //     if the soft mode is ON but the timer is running for another channel 
+        //     and pulses are > 0 we also enter ----// 
+        if( ((f_slvInfo_ps->isTimerRunnin_b == (t_bool)FALSE)
+                && (f_pwmSet_s.nbPulses_u16 > (t_uint16)0))
+        || (((f_slvInfo_ps->isTimerRunnin_b == (t_bool)TRUE)
+                && (f_slvInfo_ps->SoftSyncMode_b == (t_bool)FALSE)
+                && (AllowPulseChnl_e != FMKHRT_HRTIM_CHANNEL_NB)
+        //                                      [the pulses channel]
+                && (f_slvInfo_ps->chnlInfo_as[AllowPulseChnl_e].state_e ==
+                                                FMKHRT_CHNLST_DISACTIVATED))
+                && (f_pwmSet_s.nbPulses_u16 > (t_uint16)0)))
+        {
+            if(f_pwmSet_s.nbPulses_u16 >= CST_MAX_UINT_8BIT)
+            {
+                nbPulses_u16 = (CST_MAX_UINT_8BIT - (t_uint16)1);
+                g_SlvChnlTimPulsesRemain_ua32[f_hrlIscte_e][f_slvInfo_ps->selfId_e] = 
+                                                                            (t_uint32)(f_pwmSet_s.nbPulses_u16 - (t_uint16)CST_MAX_UINT_8BIT);
+            }
+            else 
+            {
+                nbPulses_u16 = (f_pwmSet_s.nbPulses_u16 - (t_uint16)1);
+                g_SlvChnlTimPulsesRemain_ua32[f_hrlIscte_e][f_slvInfo_ps->selfId_e] = (t_uint32)0;
+            }
+            
+            Ret_e = s_FMKHRT_GetBspTimerIndex(f_slvInfo_ps->selfId_e, &bspTImerIdx_u32);
+            if(Ret_e != RC_OK)
+            {
+                ASSERT((t_uint16)Ret_e);
+            }
+            else 
+            {
+                g_HrTimInfo_as[f_hrlIscte_e].bspItsc_s.Instance->
+                        sTimerxRegs[bspTImerIdx_u32].REPxR = nbPulses_u16; // could be 0 doesn't matter
+
+                // __HAL_HRTIM_TIMER_CLEAR_IT(&g_HrTimInfo_as[f_hrlIscte_e].bspItsc_s,
+                //                             bspTImerIdx_u32,
+                //                             HRTIM_TIM_IT_REP);
+                // __HAL_HRTIM_TIMER_CLEAR_FLAG(&g_HrTimInfo_as[f_hrlIscte_e].bspItsc_s,
+                //                             bspTImerIdx_u32,
+                //                             HRTIM_TIM_FLAG_REP);
+                //---- Reset Basic Timer Genration for RCR ----//
+                Ret_e = s_FMKHRT_SetHwOutputState(  (&g_HrTimInfo_as[f_hrlIscte_e]),
+                                                    f_slvInfo_ps->selfId_e,
+                                                    FMKHRT_HRTIM_CHANNEL_1, // not used
+                                                    FMKHRT_RUN_MODE_IT,
+                                                    FMKHRT_HW_OPE_TIM_BASIC,
+                                                    FMKHRT_CHNLST_ACTIVATED);
+                //---- set all slave channel which are configured to on ----//
+                for(idxChnl_u8 = (t_uint8)startIdx_u8 ; 
+                (idxChnl_u8 < endIdx_u8) 
+                && (Ret_e == RC_OK) ;
+                idxChnl_u8++)
+                {
+                    f_slvInfo_ps->chnlInfo_as[idxChnl_u8].isSyncOpeON_b = (t_bool)TRUE;
+                    Ret_e = s_FMKHRT_SetHwOutputState(  (&g_HrTimInfo_as[f_hrlIscte_e]),
+                                                        f_slvInfo_ps->selfId_e,
+                                                        idxChnl_u8,
+                                                        f_slvInfo_ps->runMode_e,
+                                                        f_slvInfo_ps->HwOpeMode_e,
+                                                        FMKHRT_CHNLST_ACTIVATED);
+                }
+                //FMKCPU_GetTick(&g_hrt_start_time_u32);
+                //FMKSRL_LOG("Pulse start at %d\r\n", g_hrt_start_time_u32);
+            }
+        }
+    }
+    
+    return Ret_e;
 }
 
 /*********************************
@@ -1413,7 +1642,7 @@ static void s_FMKHRT_BspCallbackMngmnt( HRTIM_HandleTypeDef * f_bspItsc_ps,
                                         t_eFMKHRT_BspCallbackId f_bspCbId_e)
 {
     t_eReturnCode Ret_e = RC_OK;
-    t_uint8 idxChnl_u8;
+    t_uint8 idxChnl_u8 = (t_uint8)0;
     t_uint8 idxHrIsct_u8 = (t_uint8)0;
     t_uint32 remainPulses_u32;
     t_bool isMasterTrigg_b = False;
@@ -1453,47 +1682,69 @@ static void s_FMKHRT_BspCallbackMngmnt( HRTIM_HandleTypeDef * f_bspItsc_ps,
             {
                 case FMKHRT_BSP_CB_REPETITION_EVNT:
                 {
-                    
                     if(isMasterTrigg_b == (t_bool)False)
                     {    
-                        if(g_isFirqtUG_ab[idxHrIsct_u8][slvTim_e] == (t_bool)TRUE)
+                        /*if(g_isFirqtUG_ab[idxHrIsct_u8][slvTim_e] == (t_bool)TRUE)
                         {
                             g_isFirqtUG_ab[idxHrIsct_u8][slvTim_e] = FALSE;
                             return;
-                        }
+                        }*/
                         //---- See if it rest pulses to set ----//
-                        
-                        for(idxChnl_u8 = (t_uint8)0 ; 
-                        idxChnl_u8 < FMKHRT_HRTIM_CHANNEL_NB ; 
-                        idxChnl_u8++)
-                        {
-                            remainPulses_u32 = g_SlvChnlTimPulsesRemain_ua32[HrTimIstc_e][slvTim_e][idxChnl_u8];
+                        //FMKCPU_GetTick(&g_hrt_end_time_u32);
+                        //FMKSRL_LOG("Pulse done at  %d\r\n", g_hrt_end_time_u32);
+                        remainPulses_u32 = g_SlvChnlTimPulsesRemain_ua32[HrTimIstc_e][slvTim_e];
+                        //FMKSRL_LOG("Pulse left %d", remainPulses_u32);
 
-                            if((slvInfo_ps->chnlInfo_as[idxChnl_u8].state_e == FMKHRT_CHNLST_ACTIVATED))
+                        if(remainPulses_u32 > (t_uint32)0)
+                        {
+                            if(remainPulses_u32 > (2 * (CST_MAX_UINT_8BIT + 1)))
                             {
-                                if( remainPulses_u32 > (t_uint32)0)
-                                {
-                                    if(remainPulses_u32 > CST_MAX_UINT_8BIT)
-                                    {
-                                        g_HrTimInfo_as[HrTimIstc_e].bspItsc_s.Instance->
-                                            sTimerxRegs[f_bspTimIdx_u32].REPxR = CST_MAX_UINT_8BIT;
-                                        g_SlvChnlTimPulsesRemain_ua32[HrTimIstc_e][slvTim_e][idxChnl_u8] -= (t_uint32)CST_MAX_UINT_8BIT;
-                                    }
-                                    else
-                                    {
-                                        g_HrTimInfo_as[HrTimIstc_e].bspItsc_s.Instance->
-                                            sTimerxRegs[f_bspTimIdx_u32].REPxR = remainPulses_u32;
-                                        g_SlvChnlTimPulsesRemain_ua32[HrTimIstc_e][slvTim_e][idxChnl_u8] -= (t_uint32)(remainPulses_u32);
-                                    }
-                                    //---- Restart Basic Timer IT ----//
-                                    Ret_e = s_FMKHRT_SetHwOutputState((&g_HrTimInfo_as[HrTimIstc_e]),
-                                                                        slvTim_e,
-                                                                        idxChnl_u8,
-                                                                        FMKHRT_RUN_MODE_IT,
-                                                                        FMKHRT_HW_OPE_TIM_BASIC,
-                                                                        FMKHRT_CHNLST_ACTIVATED);
-                                }
-                                else 
+                                //FMKSRL_LOG("Set %d\r\n", (CST_MAX_UINT_8BIT - 1));
+                                g_HrTimInfo_as[HrTimIstc_e].bspItsc_s.Instance->
+                                    sTimerxRegs[f_bspTimIdx_u32].REPxR = (CST_MAX_UINT_8BIT - (t_uint32)1);
+                                g_SlvChnlTimPulsesRemain_ua32[HrTimIstc_e][slvTim_e] -= (t_uint32)(CST_MAX_UINT_8BIT);
+                            }
+                            else if(remainPulses_u32 > (t_uint32)CST_MAX_UINT_8BIT)
+                            {
+                                //FMKSRL_LOG("Set last pulses %d", (remainPulses_u32 - CST_MAX_UINT_8BIT));
+                                g_HrTimInfo_as[HrTimIstc_e].bspItsc_s.Instance->
+                                    sTimerxRegs[f_bspTimIdx_u32].REPxR = (remainPulses_u32 - (CST_MAX_UINT_8BIT + (t_uint32)1));
+                                g_SlvChnlTimPulsesRemain_ua32[HrTimIstc_e][slvTim_e] = (t_uint32)(remainPulses_u32 - (t_uint32)CST_MAX_UINT_8BIT);
+                            }
+                            else // remain pulse = 0, the last burst pulse will be now load,
+                            //      do nothing
+                            {
+                                //FMKSRL_LOG("Wait last pulse to applied %d \r\n", g_hrt_end_time_u32);
+                                g_SlvChnlTimPulsesRemain_ua32[HrTimIstc_e][slvTim_e] = (t_uint32)0;
+                            }
+                            //---- update register ---//
+                            (void)HAL_HRTIM_SoftwareUpdate(&g_HrTimInfo_as[HrTimIstc_e].bspItsc_s, f_bspTimIdx_u32);                            
+                        }
+                        else 
+                        {
+                            //---- Stop Basic Timer IT ----//
+                            //FMKCPU_GetTick(&g_hrt_end_time_u32);
+                            //FMKSRL_LOG("Pulse Finished at  %d\r\n", g_hrt_end_time_u32);
+                            // __HAL_HRTIM_TIMER_CLEAR_IT(&g_HrTimInfo_as[HrTimIstc_e].bspItsc_s,
+                            //                             f_bspTimIdx_u32,
+                            //                             HRTIM_TIM_IT_REP);
+                            // __HAL_HRTIM_TIMER_CLEAR_FLAG(&g_HrTimInfo_as[HrTimIstc_e].bspItsc_s,
+                            //                                 f_bspTimIdx_u32,
+                            //                                 HRTIM_TIM_FLAG_REP);
+                            Ret_e = s_FMKHRT_SetHwOutputState((&g_HrTimInfo_as[HrTimIstc_e]),
+                                                                slvTim_e,
+                                                                idxChnl_u8, // not use
+                                                                FMKHRT_RUN_MODE_IT,
+                                                                FMKHRT_HW_OPE_TIM_BASIC,
+                                                                FMKHRT_CHNLST_DISACTIVATED);
+                            //--- first shut down channel ----//
+                            for(idxChnl_u8 = (t_uint8)0 ; 
+                            (idxChnl_u8 < FMKHRT_HRTIM_CHANNEL_NB)
+                            && (Ret_e == RC_OK) ; 
+                            idxChnl_u8++)
+                            {
+                                if((slvInfo_ps->chnlInfo_as[idxChnl_u8].isConfigured_b == (t_bool)TRUE)
+                                && (slvInfo_ps->chnlInfo_as[idxChnl_u8].isSyncOpeON_b == (t_bool)TRUE))
                                 {
                                     Ret_e = s_FMKHRT_SetHwOutputState((&g_HrTimInfo_as[HrTimIstc_e]),
                                                                         slvTim_e,
@@ -1501,16 +1752,28 @@ static void s_FMKHRT_BspCallbackMngmnt( HRTIM_HandleTypeDef * f_bspItsc_ps,
                                                                         slvInfo_ps->runMode_e,
                                                                         slvInfo_ps->HwOpeMode_e,
                                                                         FMKHRT_CHNLST_DISACTIVATED);
-                                    if((Ret_e == RC_OK)
-                                    && (slvInfo_ps->chnlInfo_as[idxChnl_u8].evntCallback_pcb != NULL_FUNCTION))
-                                    {
-                                        slvInfo_ps->chnlInfo_as[idxChnl_u8].
-                                                                evntCallback_pcb(   c_FMkHrt_ChnlLineMapp_ae[HrTimIstc_e][slvTim_e][idxChnl_u8],
-                                                                                    FMKHRT_HR_LINE_EVNT_CB_PULSE_FINISH);
-                                    }
                                 }
                             }
-                        }
+                            //---- lock channel to prevent user do stuff inside 
+                            //      callback ----//
+                            g_HrTimInfo_as->bspItsc_s.Lock = HAL_LOCKED; 
+                            //--- then call user ----//
+                            for(idxChnl_u8 = (t_uint8)0 ; 
+                            idxChnl_u8 < FMKHRT_HRTIM_CHANNEL_NB ; 
+                            idxChnl_u8++)
+                            {
+                                if((slvInfo_ps->chnlInfo_as[idxChnl_u8].isConfigured_b == (t_bool)TRUE)
+                                && (slvInfo_ps->chnlInfo_as[idxChnl_u8].isSyncOpeON_b == (t_bool)TRUE)
+                                && (slvInfo_ps->chnlInfo_as[idxChnl_u8].evntCallback_pcb != NULL_FUNCTION))
+                                {
+                                    slvInfo_ps->chnlInfo_as[idxChnl_u8].
+                                                        evntCallback_pcb(   c_FMkHrt_ChnlLineMapp_ae[HrTimIstc_e][slvTim_e][idxChnl_u8],
+                                                                            FMKHRT_HR_LINE_EVNT_CB_PULSE_FINISH);
+                                }
+                            }
+                            g_HrTimInfo_as->bspItsc_s.Lock = HAL_UNLOCKED;
+                        }                            
+                        
                     }
                     break;
                 }
@@ -1730,10 +1993,11 @@ static t_eReturnCode s_FMKHRT_GetBspPeriod( t_uint16 f_TimFreqMHz_16,
             if(bspPeriod_u32 > CST_MAX_UINT_16BIT)
             {
                 *f_bspPeriod_pu32 = (t_uint32)CST_MAX_UINT_16BIT;
+                ASSERT((t_uint16)0);
             }
             else 
             {
-                *f_bspPeriod_pu32 = bspPeriod_u32;
+                *f_bspPeriod_pu32 = (bspPeriod_u32 - (t_uint32)1);
             }
         }
         else 

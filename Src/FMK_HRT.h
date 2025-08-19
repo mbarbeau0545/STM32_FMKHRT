@@ -71,6 +71,7 @@
         t_float32 frequency_f32;                 /**< Frequency of the desire PWM */
         t_eFMKHRT_LinePolarity polarity_e;      /**< Polarity of the PWM */
         t_uint32 deadTime_u32;                  /**< Dead Time between transition from Low State to High State */
+        t_bool enableSyncPulseChnlOpe_b;      /**< Enable the pulse synchronization */
     } t_sFMKHRT_PwmCfg;
 
     /**
@@ -228,7 +229,7 @@
     *
     */
     HRTIM_HandleTypeDef * FMKHRT_PRIVATE_GetHandleTypeDef(t_eFMKHRT_HighResLine f_HRLine_e);
-#endif // APPSYS_MODULE_FMKHRT_EN
+#endif // APPSYS_MODULE_FMKHRT_ENABLE
 #endif // FMK_HRT_H_INCLUDED           
 //************************************************************************************
 // End of File
