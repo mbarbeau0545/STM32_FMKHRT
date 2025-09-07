@@ -1617,13 +1617,16 @@ static t_eReturnCode s_FMKHRT_UpdatePulses( t_eFMKHRT_HighResIstc f_hrlIscte_e,
                 && (Ret_e == RC_OK) ;
                 idxChnl_u8++)
                 {
-                    f_slvInfo_ps->chnlInfo_as[idxChnl_u8].isSyncOpeON_b = (t_bool)TRUE;
-                    Ret_e = s_FMKHRT_SetHwOutputState(  (&g_HrTimInfo_as[f_hrlIscte_e]),
-                                                        f_slvInfo_ps->selfId_e,
-                                                        idxChnl_u8,
-                                                        f_slvInfo_ps->runMode_e,
-                                                        f_slvInfo_ps->HwOpeMode_e,
-                                                        FMKHRT_CHNLST_ACTIVATED);
+                    if(f_slvInfo_ps->chnlInfo_as[idxChnl_u8].isConfigured_b == TRUE)
+                    {
+                        f_slvInfo_ps->chnlInfo_as[idxChnl_u8].isSyncOpeON_b = (t_bool)TRUE;
+                        Ret_e = s_FMKHRT_SetHwOutputState(  (&g_HrTimInfo_as[f_hrlIscte_e]),
+                                                            f_slvInfo_ps->selfId_e,
+                                                            idxChnl_u8,
+                                                            f_slvInfo_ps->runMode_e,
+                                                            f_slvInfo_ps->HwOpeMode_e,
+                                                            FMKHRT_CHNLST_ACTIVATED);
+                    }
                 }
                 //FMKCPU_GetTick(&g_hrt_start_time_u32);
                 //FMKSRL_LOG("Pulse start at %d\r\n", g_hrt_start_time_u32);
@@ -1718,7 +1721,7 @@ static void s_FMKHRT_BspCallbackMngmnt( HRTIM_HandleTypeDef * f_bspItsc_ps,
                                 g_SlvChnlTimPulsesRemain_ua32[HrTimIstc_e][slvTim_e] = (t_uint32)0;
                             }
                             //---- update register ---//
-                            (void)HAL_HRTIM_SoftwareUpdate(&g_HrTimInfo_as[HrTimIstc_e].bspItsc_s, f_bspTimIdx_u32);                            
+                            //(void)HAL_HRTIM_SoftwareUpdate(&g_HrTimInfo_as[HrTimIstc_e].bspItsc_s, f_bspTimIdx_u32);                            
                         }
                         else 
                         {
@@ -1740,7 +1743,7 @@ static void s_FMKHRT_BspCallbackMngmnt( HRTIM_HandleTypeDef * f_bspItsc_ps,
                             //--- first shut down channel ----//
                             for(idxChnl_u8 = (t_uint8)0 ; 
                             (idxChnl_u8 < FMKHRT_HRTIM_CHANNEL_NB)
-                            && (Ret_e == RC_OK) ; 
+                            && (Ret_e >= RC_OK) ; 
                             idxChnl_u8++)
                             {
                                 if((slvInfo_ps->chnlInfo_as[idxChnl_u8].isConfigured_b == (t_bool)TRUE)
