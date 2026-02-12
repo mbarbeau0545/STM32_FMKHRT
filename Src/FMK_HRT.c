@@ -120,6 +120,7 @@ typedef struct
 typedef struct 
 {
     t_bool isConfigured_b;                      /**< Flag to know if timer is successfully configured */
+    t_eFMKHRT_HrTimChannel selfId_e;
     t_eFMKHRT_ChnlState state_e;                /**< Enum to know the state of a channel */
     t_cbFMKHRT_HrLineEvnt * evntCallback_pcb;     
     t_bool isSyncOpeON_b;
@@ -490,6 +491,7 @@ t_eReturnCode FMKHRT_Init(void)
             for(idxHighChnl_u8 = (t_uint8)0; idxHighChnl_u8 < FMKHRT_HRTIM_CHANNEL_NB ; idxHighChnl_u8++)
             {
                 slvInfo_ps->chnlInfo_as[idxHighChnl_u8].isConfigured_b = False;
+                slvInfo_ps->chnlInfo_as[idxHighChnl_u8].selfId_e = (t_eFMKHRT_HrTimChannel)idxHighChnl_u8;
                 slvInfo_ps->chnlInfo_as[idxHighChnl_u8].state_e = FMKHRT_CHNLST_DISACTIVATED;
                 slvInfo_ps->chnlInfo_as[idxHighChnl_u8].isSyncOpeON_b = (t_bool)FALSE;
                 
@@ -1550,8 +1552,10 @@ static t_eReturnCode s_FMKHRT_UpdatePulses( t_eFMKHRT_HighResIstc f_hrlIscte_e,
             && (Ret_e == RC_OK) ; 
             idxChnl_u8++)
             {
-                if((f_slvInfo_ps->chnlInfo_as[idxChnl_u8].isConfigured_b == (t_bool)TRUE)
-                && f_slvInfo_ps->chnlInfo_as[idxChnl_u8].isSyncOpeON_b == (t_bool)TRUE)
+                if(((f_slvInfo_ps->chnlInfo_as[idxChnl_u8].isConfigured_b == (t_bool)TRUE)
+                && (f_slvInfo_ps->chnlInfo_as[idxChnl_u8].selfId_e == f_chnl_e))
+                || ((f_slvInfo_ps->chnlInfo_as[idxChnl_u8].isConfigured_b == (t_bool)TRUE)
+                && (f_slvInfo_ps->chnlInfo_as[idxChnl_u8].isSyncOpeON_b == (t_bool)TRUE)))
                 {
                     Ret_e = s_FMKHRT_SetHwOutputState(  (&g_HrTimInfo_as[f_hrlIscte_e]),
                                                         f_slvInfo_ps->selfId_e,
@@ -1847,12 +1851,18 @@ static t_eReturnCode s_FMKHRT_PerformDiagnostic(t_eFMKHRT_HighResIstc f_highResT
         //      if an error occured it can be the DMA so check for master  & 
         //      slave the DMA error code, as we don't currently used it we just check the state ----//
         if((highTimerInfo_ps->bspItsc_s.State != HAL_HRTIM_STATE_READY)
-        || (highTimerInfo_ps->bspItsc_s.State != HAL_HRTIM_STATE_BUSY))
+        || (highTimerInfo_ps->bspItsc_s.State != HAL_HRTIM_STATE_BUSY)
+        || (highTimerInfo_ps->errDetected_b == TRUE))
         {
             APPSDM_ReportDiagEvnt(  APPSDM_DIAG_ITEM_FMK_HRT_OPE_ERROR,
                                     APPSDM_DIAG_ITEM_REPORT_FAIL,
                                     (t_uint16)f_highResTimer_e,
                                     (t_uint16)highTimerInfo_ps->bspItsc_s.State);
+
+            if((currentTime_u32 - highTimerInfo_ps->lastCbError_u32) > (t_uint32)100)
+            {
+                highTimerInfo_ps->errDetected_b = FALSE;
+            }
         }
         else 
         {
