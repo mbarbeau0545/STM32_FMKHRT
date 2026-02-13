@@ -512,12 +512,7 @@ t_eReturnCode FMKHRT_Cyclic(void)
     {
         case STATE_CYCLIC_CFG:
         {
-            g_FmkHrtModState_e = STATE_CYCLIC_WAITING;
-            break;
-        }
-        case STATE_CYCLIC_WAITING:
-        {
-            // nothing to do, just wait all module are Ope
+            g_FmkHrtModState_e = STATE_CYCLIC_PREOPE;
             break;
         }
         case STATE_CYCLIC_PREOPE:
@@ -2400,7 +2395,7 @@ void HAL_HRTIM_ErrorCallback(HRTIM_HandleTypeDef *hhrtim)
         }
     }
     if(HrTimIstc_e != FMKHRT_HIGH_RES_TIMER_NB)
-    {
+    {   
         g_HrTimInfo_as[HrTimIstc_e].errDetected_b = (t_bool)TRUE;
         FMKCPU_GetTick(&g_HrTimInfo_as[HrTimIstc_e].lastCbError_u32);
     }
