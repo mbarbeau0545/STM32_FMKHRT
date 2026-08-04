@@ -109,13 +109,11 @@
         FMKHRT_FREQRANGE_DIV_4 = 0x00,      /**< Main Cpu Frequency will be divided by 4,  */
         FMKHRT_FREQRANGE_DIV_2,      /**< Main Cpu Frequency will be divided by 4,  */
         FMKHRT_FREQRANGE_DIV_1,      /**< Main Cpu Frequency will be divided by 4,  */
-#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
         FMKHRT_FREQRANGE_MUL_2,      /**< Main Cpu Frequency will be divided by 4,  */
         FMKHRT_FREQRANGE_MUL_4,      /**< Main Cpu Frequency will be divided by 4,  */
         FMKHRT_FREQRANGE_MUL_8,      /**< Main Cpu Frequency will be divided by 4,  */
         FMKHRT_FREQRANGE_MUL_16,      /**< Main Cpu Frequency will be divided by 4,  */
         FMKHRT_FREQRANGE_MUL_32,      /**< Main Cpu Frequency will be divided by 4,  */
-#endif // FMKCPU_STM32_ECU_FAMILY_G4
         FMKHRT_FREQRANGE_DIVMUL_NB,
     } t_eFMKHRT_FreqMulDiv;
 

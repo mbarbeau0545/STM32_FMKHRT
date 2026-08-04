@@ -22,6 +22,7 @@
 #include "FMK_CFG/FMKCFG_ConfigFiles/FMKHRT_ConfigPrivate.h"
 
 #include "FMK_HAL/FMK_CPU/Src/FMK_CPU.h"
+#include "FMK_HAL/FMK_SRL/Src/FMK_SRL.h"
 #include "APP_CTRL/APP_SYS/Src/APP_SYS.h"
 #include "3_APP/APP_CTRL/APP_SDM/Src/APP_SDM.h"
 // ********************************************************************
@@ -112,6 +113,7 @@ typedef struct
     t_bool isNVICEnable_b;                      /**< Flag to know the NVIC state */
     t_bool isConfigured_b;                      /**< Flag to know if timer is successfully configured */
     t_uint16 timFreqMHz_u16;                    /**< Storage for Timer Frequency */
+    t_uint32 timFreqHz_u32;                     /**< Storage for Timer Frequency in Hz */
 } t_sFMKHRT_TimMasterInfo;
 
 /**
@@ -138,6 +140,7 @@ typedef struct
     t_bool isNVICEnable_b;                                      /**< Flag to know the NVIC state */
     t_bool isConfigured_b;                                      /**< Flag to know if timer is successfully configured */
     t_uint16 timFreqMHz_u16;                                    /**< Storage for Timer Frequency */
+    t_uint32 timFreqHz_u32;                                     /**< Storage for Timer Frequency in Hz */
     t_uint32 minFreqAccept_u32;                                 /**< Min frequency allowed based  timFreqMHz_u16 ARRAMax value*/
     t_uint32 maxFreqAccept_u32;                                 /**< Max frequency allowed based  timFreqMHz_u16 ARRAMax value*/
     t_uint8 maskChnlState_u8;
@@ -436,7 +439,7 @@ static t_eReturnCode s_FMKHRT_ComputeTimerFreqRange(t_eFMKCPU_ClockPort f_HrTimC
 *  @retval RC_ERROR_WRONG_STATE              @ref RC_ERROR_WRONG_STATE
 *  @retval RC_ERROR_WRONG_RESULT             @ref RC_ERROR_WRONG_RESULT
 */
-static t_eReturnCode s_FMKHRT_GetBspPeriod( t_uint16 f_TimFreqMHz_16,
+static t_eReturnCode s_FMKHRT_GetBspPeriod( t_uint32 f_timFreqHz_u32,
                                             t_uint32 f_RqstOutFreq_u32,
                                             t_uint32 * f_bspPeriod_pu32);
 /**
@@ -498,6 +501,7 @@ t_eReturnCode FMKHRT_Init(void)
             slvInfo_ps->isConfigured_b = False;
             slvInfo_ps->isNVICEnable_b = False;
             slvInfo_ps->timFreqMHz_u16 = (t_uint16)0;
+            slvInfo_ps->timFreqHz_u32 = (t_uint32)0;
             slvInfo_ps->minFreqAccept_u32 = (t_uint32)0;
             slvInfo_ps->maxFreqAccept_u32 = (t_uint32)0;
             slvInfo_ps->maskChnlState_u8 = (t_uint8)0;
@@ -856,12 +860,14 @@ t_eReturnCode FMKHRT_GetPwmLineWaveform(t_eFMKHRT_HighResLine f_HRLine_e,
         //---- Update Stuff Depending On Mask Update ----//
         if(GETBIT(f_maskUpdate_u8, FMKHRT_BIT_PWM_FREQUENCY) == BIT_IS_SET_8B)
         {
-            f_PwmVal_ps->frequency_f32 =  ((t_float32)((t_float32)slvTimInfo_ps->timFreqMHz_u16) / ((t_float32)bspPeriod_u32));
+            f_PwmVal_ps->frequency_f32 = (t_float32)slvTimInfo_ps->timFreqHz_u32
+                                       / (t_float32)(bspPeriod_u32 + (t_uint32)1);
         }
         if(GETBIT(f_maskUpdate_u8, FMKHRT_BIT_PWM_DUTYCYCLE) == BIT_IS_SET_8B)
         {     
-            f_PwmVal_ps->dutyCycle_u16 = (t_uint16)((((t_float32)bspCompareUnitVal_u32 / (t_float32)bspPeriod_u32) 
-                                                            * (t_float32)FMKHRT_PWM_MAX_DUTY_CYLCE));
+            f_PwmVal_ps->dutyCycle_u16 = (t_uint16)((((t_float32)bspCompareUnitVal_u32
+                                                    / (t_float32)(bspPeriod_u32 + (t_uint32)1))
+                                                    * (t_float32)FMKHRT_PWM_MAX_DUTY_CYLCE));
 
         }
         if(GETBIT(f_maskUpdate_u8, FMKHRT_BIT_PWM_NB_PULSES) == BIT_IS_SET_8B)
@@ -909,13 +915,11 @@ static t_eReturnCode  s_FMKHRT_Operational(void)
         if(hrtimInfo_ps->isConfigured_b == (t_bool)TRUE)
         {
             Ret_e = s_FMKHRT_PerformDiagnostic(idxHrtim_u8);
-#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
             if(hrtimInfo_ps->isCalibrate_b == (t_bool)FALSE)
             {
-                (void)HAL_HRTIM_DLLCalibrationStart(&hrtimInfo_ps->bspItsc_s, FMKHRT_BASIC_CALIBRATION);
-                (void)HAL_HRTIM_PollForDLLCalibration(&hrtimInfo_ps->bspItsc_s, 500);
+                (void)FMKHRT_Set_SpecificCalibration(&hrtimInfo_ps->bspItsc_s,
+                                                      (t_uint32)500);
             }
-#endif // FMKCPU_STM32_ECU_FAMILY_G4
         }
     }
     return Ret_e;
@@ -960,15 +964,16 @@ static t_eReturnCode s_FMKHRT_SetBspHrTimInit( t_eFMKHRT_HighResIstc f_HrTimIstc
             Ret_e = FMKCPU_Set_NVICState(g_HrTimInfo_as[f_HrTimIstc_e].mstInfo_s.c_IRQNType_e,
                                         FMKCPU_NVIC_OPE_ENABLE);
         }
-#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
         //---- Set the calibration for Instance Timer ----//
         if((bspRet_e == HAL_OK) && (Ret_e == RC_OK))
         {
-            //---- We do it in interrupt mode, and we finish configuration in Callback ----//
-            bspRet_e = HAL_HRTIM_DLLCalibrationStart(bspHrTimIsct_ps, FMKHRT_BASIC_CALIBRATION);
-            bspRet_e = HAL_HRTIM_PollForDLLCalibration(bspHrTimIsct_ps, 500);
+            Ret_e = FMKHRT_Set_SpecificCalibration(bspHrTimIsct_ps,
+                                                   (t_uint32)500);
+            if(Ret_e != RC_OK)
+            {
+                bspRet_e = HAL_ERROR;
+            }
         }
-#endif // FMKCPU_STM32_ECU_FAMILY_G4
         if(bspRet_e != HAL_OK)
         {
             Ret_e = RC_ERROR_WRONG_RESULT;
@@ -1039,9 +1044,9 @@ static t_eReturnCode s_FMKHRT_ConfigureSlaveTimer(  t_sFMKHRT_HrTimInfo * f_HrTi
                 f_rqstOutputFrequency_u32 = slvInfo_ps->minFreqAccept_u32;
             }
 
-            Ret_e = s_FMKHRT_GetBspPeriod(  slvInfo_ps->timFreqMHz_u16, 
+            Ret_e = s_FMKHRT_GetBspPeriod(  slvInfo_ps->timFreqHz_u32, 
                                             f_rqstOutputFrequency_u32,
-                                            (&bspPeriod_u32));
+                                            (&bspPeriod_u32)); 
         }
         //---- Get Bsp Timer Index ----//
         if(Ret_e == RC_OK)
@@ -1172,7 +1177,10 @@ static t_eReturnCode s_FMKHRT_ConfigureSlaveChannel(t_sFMKHRT_HrTimInfo * f_HrTi
                 if(Ret_e == RC_OK)
                 {
                     bspOutCfg_s.Polarity = bspPolarity_u32;
-                    bspOutCfg_s.ResetSource = HRTIM_OUTPUTRESET_TIMPER;
+                    bspOutCfg_s.SetSource = HRTIM_OUTPUTSET_TIMPER;
+                    bspOutCfg_s.ResetSource = (f_chnl_e == FMKHRT_HRTIM_CHANNEL_1) ?
+                                                HRTIM_OUTPUTRESET_TIMCMP1 :
+                                                HRTIM_OUTPUTRESET_TIMCMP2;
                     bspOutCfg_s.IdleMode = HRTIM_OUTPUTIDLEMODE_NONE;
                     bspOutCfg_s.IdleLevel = HRTIM_OUTPUTIDLELEVEL_INACTIVE;
                     bspOutCfg_s.FaultLevel = HRTIM_OUTPUTFAULTLEVEL_NONE;
@@ -1454,7 +1462,7 @@ static t_eReturnCode s_FMKHRT_UpdateFrequency(  t_eFMKHRT_HighResIstc f_hrlIscte
                 f_freqency_f32 = f_slvInfo_ps->minFreqAccept_u32;
             }
 
-            Ret_e = s_FMKHRT_GetBspPeriod(  f_slvInfo_ps->timFreqMHz_u16, 
+            Ret_e = s_FMKHRT_GetBspPeriod(  f_slvInfo_ps->timFreqHz_u32, 
                                             (t_uint32)f_freqency_f32,
                                             (&bspPeriod_u32)); 
             if(Ret_e == RC_OK)
@@ -1501,13 +1509,10 @@ static t_eReturnCode s_FMKHRT_UpdateDutyCycle(  t_eFMKHRT_HighResIstc f_hrlIscte
         {
             bspPeriod_u32 = __HAL_HRTIM_GETPERIOD(  (&g_HrTimInfo_as[f_hrlIscte_e].bspItsc_s),
                                                     bspTimerIdx_u32);
-            bspCompareUnitVal_u32 = (t_uint32)(bspPeriod_u32  * (t_uint32)f_dutycyle_u16 
-                                                    / FMKHRT_PWM_MAX_DUTY_CYLCE);
-            
-            if(bspCompareUnitVal_u32 == (t_uint32)0)
-            {
-                bspCompareUnitVal_u32 = 1;
-            }
+            bspCompareUnitVal_u32 = (t_uint32)((((bspPeriod_u32 + (t_uint32)1)
+                                                * (t_uint32)f_dutycyle_u16)
+                                                + (FMKHRT_PWM_MAX_DUTY_CYLCE / (t_uint16)2))
+                                                / FMKHRT_PWM_MAX_DUTY_CYLCE);
             ((f_chnl_e == FMKHRT_HRTIM_CHANNEL_1) ? 
                 (bspCompareUnit_u32 = HRTIM_COMPAREUNIT_1) : 
                 (bspCompareUnit_u32 = HRTIM_COMPAREUNIT_2));
@@ -1515,7 +1520,7 @@ static t_eReturnCode s_FMKHRT_UpdateDutyCycle(  t_eFMKHRT_HighResIstc f_hrlIscte
             __HAL_HRTIM_SETCOMPARE( (&g_HrTimInfo_as[f_hrlIscte_e].bspItsc_s),
                                     bspTimerIdx_u32,
                                     bspCompareUnit_u32,
-                                    (bspCompareUnitVal_u32 - 1));
+                                    bspCompareUnitVal_u32);
         }
     }
 
@@ -2061,15 +2066,13 @@ static t_eReturnCode s_FMKHRT_GetBspTimerIndex( t_eFMKHRT_HighResSlvTim f_hrSlvT
             case FMKHRT_HRTIM_SLAVE_5:
                 *f_bspTimerIdx_pu32 = HRTIM_TIMERINDEX_TIMER_E;
                 break;
-// idem code specific gen code
-#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
-            case FMKHRT_HRTIM_SLAVE_6:
-                *f_bspTimerIdx_pu32 = HRTIM_TIMERINDEX_TIMER_F;
-                break;
-#endif // FMKCPU_STM32_ECU_FAMILY_G4
             case FMKHRT_HRTIM_SLAVE_NB:
             default:
-                Ret_e = RC_ERROR_NOT_SUPPORTED;
+                Ret_e = FMKHRT_Get_BspTimerIndexSpecific(f_hrSlvTim_e, f_bspTimerIdx_pu32);
+                if(Ret_e != RC_OK)
+                {
+                    Ret_e = RC_ERROR_NOT_SUPPORTED;
+                }
         }
     }
 
@@ -2114,15 +2117,13 @@ static t_eReturnCode s_FMKHRT_GetBspTimerResetIndex( t_eFMKHRT_HighResSlvTim f_h
             case FMKHRT_HRTIM_SLAVE_5:
                 *f_bspTimerUpdateIdx_pu32 = HRTIM_TIMERUPDATE_E;
                 break;
-// idem code specific gen code
-#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
-            case FMKHRT_HRTIM_SLAVE_6:
-                *f_bspTimerUpdateIdx_pu32 = HRTIM_TIMERUPDATE_F;
-                break;
-#endif // FMKCPU_STM32_ECU_FAMILY_G4
             case FMKHRT_HRTIM_SLAVE_NB:
             default:
-                Ret_e = RC_ERROR_NOT_SUPPORTED;
+                Ret_e = FMKHRT_Get_BspTimerUpdateIndexSpecific(f_hrSlvTim_e, f_bspTimerUpdateIdx_pu32);
+                if(Ret_e != RC_OK)
+                {
+                    Ret_e = RC_ERROR_NOT_SUPPORTED;
+                }
         }
     }
 
@@ -2167,15 +2168,13 @@ static t_eReturnCode s_FMKHRT_GetBspTimerUpdateIndex( t_eFMKHRT_HighResSlvTim f_
             case FMKHRT_HRTIM_SLAVE_5:
                 *f_bspTimerResetIdx_pu32 = HRTIM_TIMERRESET_TIMER_E;
                 break;
-// idem code specific gen code
-#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
-            case FMKHRT_HRTIM_SLAVE_6:
-                *f_bspTimerResetIdx_pu32 = HRTIM_TIMERRESET_TIMER_F;
-                break;
-#endif // FMKCPU_STM32_ECU_FAMILY_G4
             case FMKHRT_HRTIM_SLAVE_NB:
             default:
-                Ret_e = RC_ERROR_NOT_SUPPORTED;
+                Ret_e = FMKHRT_Get_BspTimerResetIndexSpecific(f_hrSlvTim_e, f_bspTimerResetIdx_pu32);
+                if(Ret_e != RC_OK)
+                {
+                    Ret_e = RC_ERROR_NOT_SUPPORTED;
+                }
         }
     }
 
@@ -2209,25 +2208,12 @@ static t_eReturnCode s_FMKHRT_GetPrescalerRatio(t_eFMKHRT_FreqMulDiv f_CpuFreqMu
             case FMKHRT_FREQRANGE_DIV_1:
                 *f_PscRatio_pu32 = HRTIM_PRESCALERRATIO_DIV1;
                 break;
-#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
-            case FMKHRT_FREQRANGE_MUL_2:
-                *f_PscRatio_pu32 = HRTIM_PRESCALERRATIO_MUL2;
-                break;
-            case FMKHRT_FREQRANGE_MUL_4:
-                *f_PscRatio_pu32 = HRTIM_PRESCALERRATIO_MUL4;
-                break;
-            case FMKHRT_FREQRANGE_MUL_8:
-                *f_PscRatio_pu32 = HRTIM_PRESCALERRATIO_MUL8;
-                break;
-            case FMKHRT_FREQRANGE_MUL_16:
-                *f_PscRatio_pu32 = HRTIM_PRESCALERRATIO_MUL16;
-                break;
-            case FMKHRT_FREQRANGE_MUL_32:
-                *f_PscRatio_pu32 = HRTIM_PRESCALERRATIO_MUL32;
-                break;
-#endif // FMKCPU_STM32_ECU_FAMILY_G4
             default:
-                Ret_e = RC_ERROR_NOT_SUPPORTED;
+                Ret_e = FMKHRT_Get_PrescalerRatioSpecific(f_CpuFreqMulDiv_e, f_PscRatio_pu32);
+                if(Ret_e != RC_OK)
+                {
+                    Ret_e = RC_ERROR_NOT_SUPPORTED;
+                }
 
         }
     }
@@ -2238,7 +2224,7 @@ static t_eReturnCode s_FMKHRT_GetPrescalerRatio(t_eFMKHRT_FreqMulDiv f_CpuFreqMu
 /*********************************
  * s_FMKHRT_GetBspPeriod
  *********************************/
-static t_eReturnCode s_FMKHRT_GetBspPeriod( t_uint16 f_TimFreqMHz_16,
+static t_eReturnCode s_FMKHRT_GetBspPeriod( t_uint32 f_timFreqHz_u32,
                                             t_uint32 f_RqstOutFreq_u32,
                                             t_uint32 * f_bspPeriod_pu32)
 {
@@ -2251,9 +2237,9 @@ static t_eReturnCode s_FMKHRT_GetBspPeriod( t_uint16 f_TimFreqMHz_16,
     }
     if(Ret_e == RC_OK)
     {
-        if(f_RqstOutFreq_u32 > (t_uint32)0)
+        if((f_RqstOutFreq_u32 > (t_uint32)0) && (f_timFreqHz_u32 > (t_uint32)0))
         {
-            bspPeriod_u32 = (t_uint32)(((t_uint32)f_TimFreqMHz_16 * CST_MHZ_TO_HZ) 
+            bspPeriod_u32 = (t_uint32)((f_timFreqHz_u32 + (f_RqstOutFreq_u32 / (t_uint32)2))
                                             / (t_uint32)f_RqstOutFreq_u32);
             
             if(bspPeriod_u32 > CST_MAX_UINT_16BIT)
@@ -2287,8 +2273,10 @@ static t_eReturnCode s_FMKHRT_ComputeTimerFreqRange(t_eFMKCPU_ClockPort f_HrTimC
     t_eReturnCode Ret_e = RC_OK;
     t_eFMKCPU_SysClkOsc oscTimerSrc_e;
     t_uint16 hrtimFreqMHz_u16 = (t_uint16)0;
-    t_uint16 SysFreqMHz_u16 = (t_uint16)0;
-    t_uint16 slvFreqMHz_u16;
+    t_uint16 ahbFreqMHz_u16 = (t_uint16)0;
+    t_uint16 slvFreqMHz_u16 = (t_uint16)0;
+    t_uint32 slvFreqHz_u32 = (t_uint32)0;
+    t_uint8 hrtimClkMultiplier_u8 = (t_uint8)1;
 
     if(f_slvInfo_ps == (t_sFMKHRT_TimSlaveInfo *)NULL)
     {
@@ -2305,17 +2293,18 @@ static t_eReturnCode s_FMKHRT_ComputeTimerFreqRange(t_eFMKCPU_ClockPort f_HrTimC
         }
         if(Ret_e == RC_OK)
         {
-            Ret_e = FMKCPU_GetSysClkValue(FMKCPU_SYS_CLOCK_SYSTEM, &SysFreqMHz_u16);
+            Ret_e = FMKCPU_GetSysClkValue(FMKCPU_SYS_CLOCK_AHB1, &ahbFreqMHz_u16);
         }
         if(Ret_e == RC_OK)
         {
-            //---- see documentation fore more info, but basically 
-            //      the basic timer frequency is double whenever the sysclck value of the bus for 
-            //      the timer is < to the sys clock ----//
-            if(SysFreqMHz_u16 > hrtimFreqMHz_u16)
-            {
-                hrtimFreqMHz_u16 = (t_uint32)((t_uint32)2 * (t_uint32)hrtimFreqMHz_u16);
-            }
+            Ret_e = FMKHRT_Get_TimerClockMultiplierSpecific(f_HrTimClkPort_e,
+                                                            hrtimFreqMHz_u16,
+                                                            ahbFreqMHz_u16,
+                                                            &hrtimClkMultiplier_u8);
+        }
+        if(Ret_e == RC_OK)
+        {
+            hrtimFreqMHz_u16 = (t_uint16)((t_uint16)hrtimClkMultiplier_u8 * hrtimFreqMHz_u16);
         }
 
     }
@@ -2324,23 +2313,6 @@ static t_eReturnCode s_FMKHRT_ComputeTimerFreqRange(t_eFMKCPU_ClockPort f_HrTimC
         //----- In theory we don't passed 0xFFFF in value even with 500 MHz system.
         switch(f_CpuFreqMulDiv_e)
         {
-#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
-            case FMKHRT_FREQRANGE_MUL_32:
-                slvFreqMHz_u16 = (t_uint16)(hrtimFreqMHz_u16 * (t_uint16)32);
-                break;
-            case FMKHRT_FREQRANGE_MUL_16:
-                slvFreqMHz_u16 = (t_uint16)(hrtimFreqMHz_u16 * (t_uint16)16);
-                break;
-            case FMKHRT_FREQRANGE_MUL_8:
-                slvFreqMHz_u16 = (t_uint16)(hrtimFreqMHz_u16 * (t_uint16)8);
-                break;
-            case FMKHRT_FREQRANGE_MUL_4:
-                slvFreqMHz_u16 = (t_uint16)(hrtimFreqMHz_u16 * (t_uint16)4);
-                break;
-            case FMKHRT_FREQRANGE_MUL_2:
-                slvFreqMHz_u16 = (t_uint16)(hrtimFreqMHz_u16 * (t_uint16)2);
-                break;
-#endif // FMKCPU_STM32_ECU_FAMILY_G4
             case FMKHRT_FREQRANGE_DIV_1:
                 slvFreqMHz_u16 = (t_uint16)(hrtimFreqMHz_u16);
                 break;
@@ -2351,16 +2323,31 @@ static t_eReturnCode s_FMKHRT_ComputeTimerFreqRange(t_eFMKCPU_ClockPort f_HrTimC
                 slvFreqMHz_u16 = (t_uint16)(hrtimFreqMHz_u16 / (t_uint16)4);
                 break;
             default:
-                slvFreqMHz_u16 = (t_uint16)0;
-                Ret_e = RC_ERROR_NOT_SUPPORTED;
+                Ret_e = FMKHRT_Get_SlaveTimerFreqSpecific(f_CpuFreqMulDiv_e,
+                                                          hrtimFreqMHz_u16,
+                                                          &slvFreqMHz_u16);
+                if(Ret_e != RC_OK)
+                {
+                    slvFreqMHz_u16 = (t_uint16)0;
+                    Ret_e = RC_ERROR_NOT_SUPPORTED;
+                }
         }
         if(Ret_e == RC_OK)
         {
+            slvFreqHz_u32 = (t_uint32)slvFreqMHz_u16 * CST_MHZ_TO_HZ;
             f_slvInfo_ps->minFreqAccept_u32 = (t_uint32)((t_uint32)(slvFreqMHz_u16  * CST_MHZ_TO_HZ)/ 
                                                                     FMKHRT_PWM_MAX_ARR_VALUE);
             f_slvInfo_ps->maxFreqAccept_u32 = (t_uint32)((t_uint32)(slvFreqMHz_u16 * CST_MHZ_TO_HZ)/ 
                                                                     FMKHRT_PWM_MIN_ARR_VALUE);
             f_slvInfo_ps->timFreqMHz_u16 = slvFreqMHz_u16;
+            f_slvInfo_ps->timFreqHz_u32 = slvFreqHz_u32;
+            FMKSRL_LOG("[HRT] clkPort=%u src=%uMHz mul=%u eff=%uMHz slave=%u div=%u\r\n",
+                       f_HrTimClkPort_e,
+                       hrtimFreqMHz_u16 / (t_uint16)hrtimClkMultiplier_u8,
+                       hrtimClkMultiplier_u8,
+                       hrtimFreqMHz_u16,
+                       f_slvInfo_ps->selfId_e,
+                       f_CpuFreqMulDiv_e);
         }
     }
 
@@ -2399,16 +2386,14 @@ static t_eReturnCode s_FMKHRT_GetEnumTimeIdxFromBsp(    t_uint32 f_bspTimIdx_u32
             case HRTIM_TIMERINDEX_TIMER_E:
                 *f_timSlv_pe = FMKHRT_HRTIM_SLAVE_5;
                 break;
-// make this in code gen
-#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
-            case HRTIM_TIMERINDEX_TIMER_F:
-                *f_timSlv_pe = FMKHRT_HRTIM_SLAVE_6;
-                break;
-#endif
             case HRTIM_TIMERINDEX_MASTER:
             default:
-                *f_timSlv_pe = FMKHRT_HRTIM_SLAVE_NB;
-                Ret_e = RC_WARNING_NO_OPERATION;
+                Ret_e = FMKHRT_Get_EnumTimerIdxSpecific(f_bspTimIdx_u32, f_timSlv_pe);
+                if(Ret_e != RC_OK)
+                {
+                    *f_timSlv_pe = FMKHRT_HRTIM_SLAVE_NB;
+                    Ret_e = RC_WARNING_NO_OPERATION;
+                }
                 break;
         }
     }
@@ -2568,28 +2553,15 @@ static t_eReturnCode s_FMKHRT_GetBspChannel(t_eFMKHRT_HighResSlvTim f_hrSlvTim_e
                 
                 break;
             }
-#if defined(FMKCPU_STM32_ECU_FAMILY_G4)
-            case FMKHRT_HRTIM_SLAVE_6:
-            {
-                if(f_chnl_e == FMKHRT_HRTIM_CHANNEL_1)
-                {
-                    *f_bspOutputChnl_pu32 = HRTIM_OUTPUT_TF1;
-                }
-                else if(f_chnl_e == FMKHRT_HRTIM_CHANNEL_2)
-                {
-                    *f_bspOutputChnl_pu32 = HRTIM_OUTPUT_TF2;
-                }
-                else 
-                {
-                    Ret_e = RC_ERROR_NOT_SUPPORTED;
-                    *f_bspOutputChnl_pu32 = (t_uint32)0;
-                }
-                break;
-            }
-#endif // FMKCPU_STM32_ECU_FAMILY_G4
             case FMKHRT_HRTIM_SLAVE_NB:
             default:
-                Ret_e = RC_ERROR_NOT_SUPPORTED;
+                Ret_e = FMKHRT_Get_BspOutputChannelSpecific(f_hrSlvTim_e,
+                                                            f_chnl_e,
+                                                            f_bspOutputChnl_pu32);
+                if(Ret_e != RC_OK)
+                {
+                    Ret_e = RC_ERROR_NOT_SUPPORTED;
+                }
         }
     }
 
