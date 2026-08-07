@@ -578,7 +578,7 @@ t_eReturnCode FMKHRT_GetState(t_eCyclicModState *f_State_pe)
     if(f_State_pe == (t_eCyclicModState *)NULL)
     {
         Ret_e = RC_ERROR_PTR_NULL;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(Ret_e == RC_OK)
     {
@@ -617,7 +617,7 @@ t_eReturnCode FMKHRT_ConfigurePwmLine(  t_eFMKHRT_HighResLine f_HRLine_e,
     if(f_HRLine_e >= FMKHRT_HR_LINE_NB)
     {
         Ret_e = RC_ERROR_PARAM_INVALID;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     //---- Get Information about Timer -----//
     if(Ret_e == RC_OK) 
@@ -682,7 +682,7 @@ t_eReturnCode FMKHRT_ConfigurePwmLine(  t_eFMKHRT_HighResLine f_HRLine_e,
     }
     if(Ret_e < RC_OK)
     {
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
 
     return Ret_e;
@@ -706,7 +706,7 @@ t_eReturnCode FMKHRT_SetPwmLineWaveform(t_eFMKHRT_HighResLine f_HRLine_e,
     if(f_HRLine_e >= FMKHRT_HR_LINE_NB)
     {
         Ret_e = RC_ERROR_PARAM_INVALID;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(g_FmkHrtModState_e != STATE_CYCLIC_OPE)
     {
@@ -727,7 +727,7 @@ t_eReturnCode FMKHRT_SetPwmLineWaveform(t_eFMKHRT_HighResLine f_HRLine_e,
         || (g_HrTimInfo_as[hrTimIstc_e].slvInfo_as[hrSlvTim_e].isConfigured_b == (t_bool)False)
         || (g_HrTimInfo_as[hrTimIstc_e].slvInfo_as[hrSlvTim_e].chnlInfo_as[hrChnl_e].isConfigured_b == (t_bool)False))
         {
-            ASSERT((t_uint16)Ret_e);
+            ASSERT((t_sint32)Ret_e);
             Ret_e = RC_ERROR_WRONG_CONFIG;
         }
         else if(g_HrTimInfo_as[hrTimIstc_e].bspItsc_s.Lock == HAL_LOCKED)
@@ -784,7 +784,7 @@ t_eReturnCode FMKHRT_SetPwmLineWaveform(t_eFMKHRT_HighResLine f_HRLine_e,
     }
     if(Ret_e < RC_OK)
     {
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
 
     return Ret_e;
@@ -812,7 +812,7 @@ t_eReturnCode FMKHRT_GetPwmLineWaveform(t_eFMKHRT_HighResLine f_HRLine_e,
     || (f_PwmVal_ps == (t_sFMKHRT_PwmOpeVal *)NULL))
     {
         Ret_e = RC_ERROR_PARAM_INVALID;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(g_FmkHrtModState_e != STATE_CYCLIC_OPE)
     {
@@ -834,7 +834,7 @@ t_eReturnCode FMKHRT_GetPwmLineWaveform(t_eFMKHRT_HighResLine f_HRLine_e,
         || (g_HrTimInfo_as[hrTimIstc_e].slvInfo_as[hrSlvTim_e].chnlInfo_as[hrChnl_e].isConfigured_b == (t_bool)False))
         {
             Ret_e = RC_ERROR_WRONG_CONFIG;
-            ASSERT((t_uint16)Ret_e);
+            ASSERT((t_sint32)Ret_e);
         }
     }
     //----- Get Timer Index -----//
@@ -877,7 +877,7 @@ t_eReturnCode FMKHRT_GetPwmLineWaveform(t_eFMKHRT_HighResLine f_HRLine_e,
     }
     if(Ret_e < RC_OK)
     {
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
 
     return Ret_e;
@@ -890,7 +890,7 @@ HRTIM_HandleTypeDef * FMKHRT_PRIVATE_GetHandleTypeDef(t_eFMKHRT_HighResLine f_HR
 {
     if(g_HrTimInfo_as[f_HRLine_e].isConfigured_b == (t_bool)False)
     {
-        ASSERT((t_uint16)0);
+        ASSERT((t_sint32)0);
     }
 
     return (HRTIM_HandleTypeDef *)(&g_HrTimInfo_as[f_HRLine_e].bspItsc_s);
@@ -937,7 +937,7 @@ static t_eReturnCode s_FMKHRT_SetBspHrTimInit( t_eFMKHRT_HighResIstc f_HrTimIstc
     if(f_HrTimIstc_e >= FMKHRT_HIGH_RES_TIMER_NB)
     {
         Ret_e = RC_ERROR_PARAM_INVALID;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(Ret_e == RC_OK)
     {
@@ -977,7 +977,7 @@ static t_eReturnCode s_FMKHRT_SetBspHrTimInit( t_eFMKHRT_HighResIstc f_HrTimIstc
         if(bspRet_e != HAL_OK)
         {
             Ret_e = RC_ERROR_WRONG_RESULT;
-            ASSERT((t_uint16)Ret_e);
+            ASSERT((t_sint32)Ret_e);
         }
         //---- HR Timer Configuration Done ----//
         if(Ret_e == RC_OK)
@@ -987,7 +987,7 @@ static t_eReturnCode s_FMKHRT_SetBspHrTimInit( t_eFMKHRT_HighResIstc f_HrTimIstc
     }
     if(Ret_e < RC_OK)
     {
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
 
     return Ret_e;
@@ -1015,7 +1015,7 @@ static t_eReturnCode s_FMKHRT_ConfigureSlaveTimer(  t_sFMKHRT_HrTimInfo * f_HrTi
     if(f_HrTimInfo_ps ==(t_sFMKHRT_HrTimInfo *)NULL)
     {
         Ret_e = RC_ERROR_PTR_NULL;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(Ret_e == RC_OK)
     {
@@ -1114,7 +1114,7 @@ static t_eReturnCode s_FMKHRT_ConfigureSlaveTimer(  t_sFMKHRT_HrTimInfo * f_HrTi
         if(bspRet_e != HAL_OK)
         {
             Ret_e = RC_ERROR_WRONG_RESULT;
-            ASSERT((t_uint16)Ret_e);
+            ASSERT((t_sint32)Ret_e);
         }
         
     }
@@ -1147,7 +1147,7 @@ static t_eReturnCode s_FMKHRT_ConfigureSlaveChannel(t_sFMKHRT_HrTimInfo * f_HrTi
     if(slvInfo_ps->chnlInfo_as[f_chnl_e].isConfigured_b == (t_bool)True)
     {
         Ret_e = RC_ERROR_ALREADY_CONFIGURED;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(Ret_e == RC_OK)
     {
@@ -1261,7 +1261,7 @@ static t_eReturnCode s_FMKHRT_ConfigureSlaveChannel(t_sFMKHRT_HrTimInfo * f_HrTi
             if(bspRet_e != HAL_OK)
             {
                 Ret_e = RC_ERROR_WRONG_RESULT;
-                ASSERT((t_uint16)Ret_e);
+                ASSERT((t_sint32)Ret_e);
             }
         }
     }
@@ -1288,13 +1288,13 @@ static t_eReturnCode s_FMKHRT_SetHwOutputState( t_sFMKHRT_HrTimInfo * f_HrTimInf
     if(f_HrTimInfo_ps == (t_sFMKHRT_HrTimInfo *)NULL)
     {
         Ret_e = RC_ERROR_PTR_NULL;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if((f_chnl_e >= FMKHRT_HRTIM_CHANNEL_NB)
     || (f_HwOpeTimer_e >= FMKHRT_HW_OPE_TIM_NB))
     {
         Ret_e = RC_ERROR_PARAM_INVALID;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     //---- get bsp information ----//
     if(Ret_e == RC_OK)
@@ -1409,7 +1409,7 @@ static t_eReturnCode s_FMKHRT_SetHwOutputState( t_sFMKHRT_HrTimInfo * f_HrTimInf
         if(bspRet_e != HAL_OK)
         {
             Ret_e = RC_ERROR_WRONG_RESULT;
-            ASSERT((t_uint16)Ret_e);
+            ASSERT((t_sint32)Ret_e);
         }
         //----- Update Only when it's the HwMode of the timer -----//
         if((f_HwOpeTimer_e == slvTimInfo_ps->HwOpeMode_e) && (Ret_e == RC_OK))
@@ -1439,12 +1439,12 @@ static t_eReturnCode s_FMKHRT_UpdateFrequency(  t_eFMKHRT_HighResIstc f_hrlIscte
     if(f_slvInfo_ps == (t_sFMKHRT_TimSlaveInfo *)NULL)
     {
         Ret_e = RC_ERROR_PTR_NULL;
-        ASSERT((t_uint16)0);
+        ASSERT((t_sint32)0);
     }
     else if (f_hrlIscte_e >= FMKHRT_HIGH_RES_TIMER_NB)
     {
         Ret_e = RC_ERROR_PARAM_INVALID;
-        ASSERT((t_uint16)0);
+        ASSERT((t_sint32)0);
     }
     else 
     {
@@ -1453,12 +1453,12 @@ static t_eReturnCode s_FMKHRT_UpdateFrequency(  t_eFMKHRT_HighResIstc f_hrlIscte
         {
             if((t_uint32)f_freqency_f32 > f_slvInfo_ps->maxFreqAccept_u32)
             {
-                ASSERT((t_uint16)f_freqency_f32);
+                ASSERT((t_sint32)f_freqency_f32);
                 f_freqency_f32 = f_slvInfo_ps->maxFreqAccept_u32;
             }
             else if((t_uint32)f_freqency_f32 < f_slvInfo_ps->minFreqAccept_u32)
             {
-                ASSERT((t_uint16)f_freqency_f32);
+                ASSERT((t_sint32)f_freqency_f32);
                 f_freqency_f32 = f_slvInfo_ps->minFreqAccept_u32;
             }
 
@@ -1494,12 +1494,12 @@ static t_eReturnCode s_FMKHRT_UpdateDutyCycle(  t_eFMKHRT_HighResIstc f_hrlIscte
     if(f_slvInfo_ps == (t_sFMKHRT_TimSlaveInfo *)NULL)
     {
         Ret_e = RC_ERROR_PTR_NULL;
-        ASSERT((t_uint16)0);
+        ASSERT((t_sint32)0);
     }
     else if ((f_hrlIscte_e >= FMKHRT_HIGH_RES_TIMER_NB)
     ||      ((f_dutycyle_u16 > FMKHRT_PWM_MAX_DUTY_CYLCE)))
     {
-        ASSERT((t_uint16)f_dutycyle_u16);
+        ASSERT((t_sint32)f_dutycyle_u16);
         Ret_e = RC_ERROR_PARAM_INVALID;
     }
     else
@@ -1550,13 +1550,13 @@ static t_eReturnCode s_FMKHRT_UpdatePulses( t_eFMKHRT_HighResIstc f_hrlIscte_e,
     if(f_slvInfo_ps == (t_sFMKHRT_TimSlaveInfo *)NULL)
     {
         Ret_e = RC_ERROR_PTR_NULL;
-        ASSERT((t_uint16)0);
+        ASSERT((t_sint32)0);
     }
     else if((f_hrlIscte_e >= FMKHRT_HIGH_RES_TIMER_NB)
     ||      (f_chnl_e >= FMKHRT_HRTIM_CHANNEL_NB))
     {
         Ret_e = RC_ERROR_PARAM_INVALID;
-        ASSERT((t_uint16)f_hrlIscte_e);
+        ASSERT((t_sint32)f_hrlIscte_e);
     }
     else if((g_AllowTimChnlPulse_ae[f_hrlIscte_e][f_slvInfo_ps->selfId_e] !=
                                                     FMKHRT_HRTIM_CHANNEL_NB)
@@ -1565,7 +1565,7 @@ static t_eReturnCode s_FMKHRT_UpdatePulses( t_eFMKHRT_HighResIstc f_hrlIscte_e,
     &&      (f_slvInfo_ps->SoftSyncMode_b == (t_bool)FALSE))
     {
         Ret_e = RC_ERROR_NOT_ALLOWED;
-        ASSERT((t_uint16)0);
+        ASSERT((t_sint32)0);
     }
     else
     {
@@ -1671,7 +1671,7 @@ static t_eReturnCode s_FMKHRT_UpdatePulses( t_eFMKHRT_HighResIstc f_hrlIscte_e,
             }
             if(Ret_e != RC_OK)
             {
-                ASSERT((t_uint16)Ret_e);
+                ASSERT((t_sint32)Ret_e);
             }
             else 
             {
@@ -1927,12 +1927,12 @@ static void s_FMKHRT_BspCallbackMngmnt( HRTIM_HandleTypeDef * f_bspItsc_ps,
         }
         if(Ret_e < RC_OK)
         {
-            ASSERT((t_uint16)Ret_e);
+            ASSERT((t_sint32)Ret_e);
         }       
     }
     else 
     {
-        ASSERT((t_uint16)HrTimIstc_e);
+        ASSERT((t_sint32)HrTimIstc_e);
     }
 
     return;
@@ -1951,7 +1951,7 @@ static t_eReturnCode s_FMKHRT_PerformDiagnostic(t_eFMKHRT_HighResIstc f_highResT
 
     if(f_highResTimer_e >= FMKHRT_HIGH_RES_TIMER_NB)
     {
-        ASSERT((t_uint16)0);
+        ASSERT((t_sint32)0);
         Ret_e = RC_ERROR_PARAM_INVALID;
     }
     else 
@@ -2039,12 +2039,12 @@ static t_eReturnCode s_FMKHRT_GetBspTimerIndex( t_eFMKHRT_HighResSlvTim f_hrSlvT
     if(f_hrSlvTim_e >= FMKHRT_HRTIM_SLAVE_NB)
     {
         Ret_e = RC_ERROR_PARAM_INVALID;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(f_bspTimerIdx_pu32 == (t_uint32 *)NULL)
     {
         Ret_e = RC_ERROR_PTR_NULL;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(Ret_e == RC_OK)
     {
@@ -2090,12 +2090,12 @@ static t_eReturnCode s_FMKHRT_GetBspTimerResetIndex( t_eFMKHRT_HighResSlvTim f_h
     if(f_hrSlvTim_e >= FMKHRT_HRTIM_SLAVE_NB)
     {
         Ret_e = RC_ERROR_PARAM_INVALID;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(f_bspTimerUpdateIdx_pu32 == (t_uint32 *)NULL)
     {
         Ret_e = RC_ERROR_PTR_NULL;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(Ret_e == RC_OK)
     {
@@ -2141,12 +2141,12 @@ static t_eReturnCode s_FMKHRT_GetBspTimerUpdateIndex( t_eFMKHRT_HighResSlvTim f_
     if(f_hrSlvTim_e >= FMKHRT_HRTIM_SLAVE_NB)
     {
         Ret_e = RC_ERROR_PARAM_INVALID;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(f_bspTimerResetIdx_pu32 == (t_uint32 *)NULL)
     {
         Ret_e = RC_ERROR_PTR_NULL;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(Ret_e == RC_OK)
     {
@@ -2193,7 +2193,7 @@ static t_eReturnCode s_FMKHRT_GetPrescalerRatio(t_eFMKHRT_FreqMulDiv f_CpuFreqMu
     || (f_CpuFreqMulDiv_e >= FMKHRT_FREQRANGE_DIVMUL_NB))
     {
         Ret_e = RC_ERROR_PTR_NULL;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(Ret_e == RC_OK)
     {
@@ -2233,7 +2233,7 @@ static t_eReturnCode s_FMKHRT_GetBspPeriod( t_uint32 f_timFreqHz_u32,
     if(f_bspPeriod_pu32 == (t_uint32 *)NULL)
     {
         Ret_e = RC_ERROR_PTR_NULL;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(Ret_e == RC_OK)
     {
@@ -2245,7 +2245,7 @@ static t_eReturnCode s_FMKHRT_GetBspPeriod( t_uint32 f_timFreqHz_u32,
             if(bspPeriod_u32 > CST_MAX_UINT_16BIT)
             {
                 *f_bspPeriod_pu32 = (t_uint32)CST_MAX_UINT_16BIT;
-                ASSERT((t_uint16)0);
+                ASSERT((t_sint32)0);
             }
             else 
             {
@@ -2255,7 +2255,7 @@ static t_eReturnCode s_FMKHRT_GetBspPeriod( t_uint32 f_timFreqHz_u32,
         else 
         {
             Ret_e = RC_ERROR_PARAM_INVALID;
-            ASSERT((t_uint16)(f_RqstOutFreq_u32));
+            ASSERT((t_sint32)(f_RqstOutFreq_u32));
         }
     }
 
@@ -2281,7 +2281,7 @@ static t_eReturnCode s_FMKHRT_ComputeTimerFreqRange(t_eFMKCPU_ClockPort f_HrTimC
     if(f_slvInfo_ps == (t_sFMKHRT_TimSlaveInfo *)NULL)
     {
         Ret_e = RC_ERROR_PTR_NULL;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(Ret_e == RC_OK)
     {
@@ -2365,7 +2365,7 @@ static t_eReturnCode s_FMKHRT_GetEnumTimeIdxFromBsp(    t_uint32 f_bspTimIdx_u32
     if(f_timSlv_pe == (t_eFMKHRT_HighResSlvTim *)NULL)
     {
         Ret_e = RC_ERROR_PTR_NULL;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(Ret_e == RC_OK)
     {
@@ -2412,12 +2412,12 @@ static t_eReturnCode s_FMKHRT_GetBspPolarity(   t_eFMKHRT_LinePolarity f_Polarit
     if(f_Polarity_e >= FMKHRT_LINE_POLARITY_NB)
     {
         Ret_e = RC_ERROR_PARAM_INVALID;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(f_bspPolarity_pu32 == (t_uint32 *)NULL)
     {
         Ret_e = RC_ERROR_PTR_NULL;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(Ret_e == RC_OK)
     {
@@ -2433,7 +2433,7 @@ static t_eReturnCode s_FMKHRT_GetBspPolarity(   t_eFMKHRT_LinePolarity f_Polarit
         {
             Ret_e = RC_ERROR_NOT_ALLOWED;
             *f_bspPolarity_pu32 = (t_uint32)0;
-            ASSERT((t_uint16)Ret_e);
+            ASSERT((t_sint32)Ret_e);
         }
     }
 
@@ -2452,12 +2452,12 @@ static t_eReturnCode s_FMKHRT_GetBspChannel(t_eFMKHRT_HighResSlvTim f_hrSlvTim_e
     || (f_chnl_e >= FMKHRT_HRTIM_CHANNEL_NB))
     {
         Ret_e = RC_ERROR_PARAM_INVALID;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(f_bspOutputChnl_pu32 == (t_uint32 *)NULL)
     {
         Ret_e = RC_ERROR_PTR_NULL;
-        ASSERT((t_uint16)Ret_e);
+        ASSERT((t_sint32)Ret_e);
     }
     if(Ret_e == RC_OK)
     {
